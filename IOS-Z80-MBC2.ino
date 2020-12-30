@@ -1,6 +1,6 @@
 /* ------------------------------------------------------------------------------
 
-S220718-R240620 - HW ref: A040618
+HW ref: A040618
 
 IOS - I/O  for Z80-MBC2 (Multi Boot Computer - Z80 128kB RAM @ 4/8Mhz @ Fosc = 16MHz)
 
@@ -41,30 +41,7 @@ PetitFS licence:
 /   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
 / * Redistributions of source code must retain the above copyright notice.
 /
-/-----------------------------------------------------------------------------/
-
-
----------------------------------------------------------------------------------
-
-
-CHANGELOG:
-
-
-S220718           First revision.
-S220718-R010918   Added "Disk Set" feature to manage multiple OS on SD (multi-booting).
-                  Added support for QP/M 2.71 (with file names timestamping).
-                  Added support for Atmega32A @ 20MHz (overclocked) to show the Z80 clock speed 
-                   accordingly (Note that 20MHz is out of Atmega32A specifications!).
-S220718-R190918   Added support for CP/M 3.
-                  Fixed a bug in the manual RTC setting.
-S220718-R260119   Changed the default serial speed to 115200 bps.
-                  Added support for xmodem protocol (extended serial Rx buffer check and  
-                   two new flags into the SYSFLAG opcode for full 8 bit serial I/O control.
-                  Added support for uTerm (A071218-R250119) reset at boot time.
-S220718-R280819   Added a new Disk Set for the UCSD Pascal implementation (porting by Michel Bernard).
-S220718-R240620   Added support for Collapse Os (https://collapseos.org/).
-
---------------------------------------------------------------------------------- */
+/---------------------------------------------------------------------------- */
 
 // ------------------------------------------------------------------------------
 //
@@ -276,12 +253,17 @@ byte          LastRxIsEmpty;              // "Last Rx char was empty" flag. Is s
 // DS3231 RTC variables
 byte          foundRTC;                   // Set to 1 if RTC is found, 0 otherwise
 byte          seconds, minutes, hours, day, month, year;
-byte          tempC;                      // Temperature (Celsius) encoded in two’s complement integer format
+byte          tempC;                      // Temperature (Celsius) encoded in two's complement integer format
 
 // SD disk and CP/M support variables
+#define SEGMENT_SIZE  128
+#define BLOCK_SIZE    512
+#define SECTOR_COUNT  32
+#define TRACK_COUNT   512
+
 FATFS         filesysSD;                  // Filesystem object (PetitFS library)
-byte          bufferSD[32];               // I/O buffer for SD disk operations (store a "segment" of a SD sector).
-                                          //  Each SD sector (512 bytes) is divided into 16 segments (32 bytes each)
+byte          bufferSD[SEGMENT_SIZE];     // I/O buffer for SD disk operations (store a "segment" of a SD sector).
+                                          // Each SD sector (512 bytes) is divided into N segments (SEGMENT_SIZE bytes each)
 const char *  fileNameSD;                 // Pointer to the string with the currently used file name
 byte          autobootFlag;               // Set to 1 if "autoboot.bin" must be executed at boot, 0 otherwise
 byte          autoexecFlag;               // Set to 1 if AUTOEXEC must be executed at CP/M cold boot, 0 otherwise
@@ -395,7 +377,7 @@ void setup()
   
   // Print some system information
   Serial.begin(115200);
-  Serial.println(F("\r\n\nZ80-MBC2 - A040618\r\nIOS - I/O Subsystem - S220718-R240620\r\n"));
+  Serial.println(F("\r\n\nZ80-MBC2 - A040618\r\nIOS - I/O Subsystem - RMH - BIG BUFFER\r\n"));
 
   // Print if the input serial buffer is 128 bytes wide (this is needed for xmodem protocol support)
   if (SERIAL_RX_BUFFER_SIZE >= 128) Serial.println(F("IOS: Found extended serial Rx buffer"));
@@ -679,14 +661,14 @@ void setup()
       do
       // Read a "segment" of a SD sector and load it into RAM
       {
-        errCodeSD = readSD(bufferSD, &numReadBytes);  // Read current "segment" (32 bytes) of the current SD serctor
+        errCodeSD = readSD(bufferSD, &numReadBytes);  // Read current "segment" (SEGMENT_SIZE bytes) of the current SD serctor
         for (iCount = 0; iCount < numReadBytes; iCount++)
         // Load the read "segment" into RAM
         {
           loadByteToRAM(bufferSD[iCount]);        // Write current data byte into RAM
         }
       }
-      while ((numReadBytes == 32) && (!errCodeSD));   // If numReadBytes < 32 -> EOF reached
+      while ((numReadBytes == SEGMENT_SIZE) && (!errCodeSD));   // If numReadBytes < SEGMENT_SIZE -> EOF reached
       if (errCodeSD)
       {
         printErrSD(2, errCodeSD, fileNameSD);
@@ -1018,7 +1000,7 @@ void loop()
           // MSB
           {
             trackSel = (((word) ioData) << 8) | lowByte(trackSel);
-            if ((trackSel < 512) && (sectSel < 32))
+            if ((trackSel < TRACK_COUNT) && (sectSel < SECTOR_COUNT))
             // Sector and track numbers valid
             {
               diskErr = 0;                      // No errors
@@ -1026,7 +1008,7 @@ void loop()
             else
             // Sector or track invalid number
             {
-              if (sectSel < 32) diskErr = 17;     // Illegal track number
+              if (sectSel < SECTOR_COUNT) diskErr = 17;     // Illegal track number
               else diskErr = 18;                  // Illegal sector number
             }
             ioOpcode = 0xFF;                      // All done. Set ioOpcode = "No operation"
@@ -1056,7 +1038,7 @@ void loop()
           //         must be performed
 
           sectSel = ioData;
-          if ((trackSel < 512) && (sectSel < 32))
+          if ((trackSel < TRACK_COUNT) && (sectSel < SECTOR_COUNT))
           // Sector and track numbers valid
           {
             diskErr = 0;                        // No errors
@@ -1064,7 +1046,7 @@ void loop()
           else
           // Sector or track invalid number
           {
-            if (sectSel < 32) diskErr = 17;     // Illegal track number
+            if (sectSel < SECTOR_COUNT) diskErr = 17;     // Illegal track number
             else diskErr = 18;                  // Illegal sector number
           }
         break;
@@ -1116,14 +1098,17 @@ void loop()
           if (!diskErr)
           // No previous error (e.g. selecting disk, track or sector)
           {
-            tempByte = ioByteCnt % 32;            // [0..31]
+            tempByte = ioByteCnt % SEGMENT_SIZE;            // [0..SEGMENT_SIZE]
             bufferSD[tempByte] = ioData;          // Store current exchanged data byte in the buffer array
-            if (tempByte == 31)
-            // Buffer full. Write all the buffer content (32 bytes) into the "disk file"
+            if (tempByte == (SEGMENT_SIZE - 1))
+            // Buffer full. Write all the buffer content (SEGMENT_SIZE bytes) into the "disk file"
             {
               diskErr = writeSD(bufferSD, &numWriBytes);
-              if (numWriBytes < 32) diskErr = 19; // Reached an unexpected EOF
-              if (ioByteCnt >= 511)
+              if (numWriBytes < SEGMENT_SIZE)
+			  {
+				diskErr = 19; // Reached an unexpected EOF
+			  }
+              if (ioByteCnt >= (BLOCK_SIZE - 1))
               // Finalize write operation and check result (if no previous error occurred)
               {
                 if (!diskErr) diskErr = writeSD(NULL, &numWriBytes);
@@ -1472,16 +1457,19 @@ void loop()
             if (!diskErr)
             // No previous error (e.g. selecting disk, track or sector)
             {
-              tempByte = ioByteCnt % 32;          // [0..31]
+              tempByte = ioByteCnt % SEGMENT_SIZE;          // [0..SEGMENT_SIZE -1]
               if (!tempByte)
-              // Read 32 bytes of the current sector on SD in the buffer (every 32 calls, starting with the first)
+              // Read SEGMENT_SIZE bytes of the current sector on SD in the buffer (every 32 calls, starting with the first)
               {
                 diskErr = readSD(bufferSD, &numReadBytes); 
-                if (numReadBytes < 32) diskErr = 19;    // Reached an unexpected EOF
+                if (numReadBytes < SEGMENT_SIZE)
+				{
+				  diskErr = 19;    // Reached an unexpected EOF
+				}
               }
               if (!diskErr) ioData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU
             }
-            if (ioByteCnt >= 511) 
+            if (ioByteCnt >= (BLOCK_SIZE - 1)) 
             {
               ioOpcode = 0xFF;                    // All done. Set ioOpcode = "No operation"
             }
@@ -2058,13 +2046,13 @@ byte openSD(const char* fileName)
 // ------------------------------------------------------------------------------
 
 byte readSD(void* buffSD, byte* numReadBytes)
-// Read one "segment" (32 bytes) starting from the current sector (512 bytes) of the opened file on SD:
+// Read one "segment" (SEGMENT_SIZE bytes) starting from the current sector (512 bytes) of the opened file on SD:
 // *  "BuffSD" is the pointer to the segment buffer;
 // *  "numReadBytes" is the pointer to the variables that store the number of read bytes;
-//     if < 32 (including = 0) an EOF was reached).
+//     if < SEGMENT_SIZE (including = 0) an EOF was reached).
 // The returned value is the resulting status (0 = ok, otherwise see printErrSD())
 //
-// NOTE1: Each SD sector (512 bytes) is divided into 16 segments (32 bytes each); to read a sector you need to
+// NOTE1: Each SD sector (512 bytes) is divided into 16 segments (SEGMENT_SIZE bytes each); to read a sector you need to
 //        to call readSD() 16 times consecutively
 //
 // NOTE2: Past current sector boundary, the next sector will be pointed. So to read a whole file it is sufficient 
@@ -2072,7 +2060,7 @@ byte readSD(void* buffSD, byte* numReadBytes)
 {
   UINT  numBytes;
   byte  errcode;
-  errcode = pf_read(buffSD, 32, &numBytes);
+  errcode = pf_read(buffSD, SEGMENT_SIZE, &numBytes);
   *numReadBytes = (byte) numBytes;
   return errcode;
 }
@@ -2080,13 +2068,13 @@ byte readSD(void* buffSD, byte* numReadBytes)
 // ------------------------------------------------------------------------------
 
 byte writeSD(void* buffSD, byte* numWrittenBytes)
-// Write one "segment" (32 bytes) starting from the current sector (512 bytes) of the opened file on SD:
+// Write one "segment" (SEGMENT_SIZE bytes) starting from the current sector (512 bytes) of the opened file on SD:
 // *  "BuffSD" is the pointer to the segment buffer;
 // *  "numWrittenBytes" is the pointer to the variables that store the number of written bytes;
-//     if < 32 (including = 0) an EOF was reached.
+//     if < SEGMENT_SIZE (including = 0) an EOF was reached.
 // The returned value is the resulting status (0 = ok, otherwise see printErrSD())
 //
-// NOTE1: Each SD sector (512 bytes) is divided into 16 segments (32 bytes each); to write a sector you need to
+// NOTE1: Each SD sector (512 bytes) is divided into 16 segments (SEGMENT_SIZE bytes each); to write a sector you need to
 //        to call writeSD() 16 times consecutively
 //
 // NOTE2: Past current sector boundary, the next sector will be pointed. So to write a whole file it is sufficient 
@@ -2098,7 +2086,7 @@ byte writeSD(void* buffSD, byte* numWrittenBytes)
   byte  errcode;
   if (buffSD != NULL)
   {
-    errcode = pf_write(buffSD, 32, &numBytes);
+    errcode = pf_write(buffSD, SEGMENT_SIZE, &numBytes);
   }
   else
   {
