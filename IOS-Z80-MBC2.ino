@@ -253,11 +253,42 @@ const byte * const flahBootTable[1] PROGMEM = {boot_A_}; // Payload pointers tab
 //  Global variables
 //
 // ------------------------------------------------------------------------------
+enum OpCode : byte
+{
+  // Write operations
+  USER_LED      = 0x00, // Bytes exchanged 1
+  SERIAL_TX     = 0x01, // Bytes exchanged 1
+  GPIOA_WRITE   = 0x03, // Bytes exchanged 1
+  GPIOB_WRITE   = 0x04, // Bytes exchanged 1
+  IODIRA_WRITE  = 0x05, // Bytes exchanged 1
+  IODIRB_WRITE  = 0x06, // Bytes exchanged 1
+  GPPUA_WRITE   = 0x07, // Bytes exchanged 1
+  GPPUB_WRITE   = 0x08, // Bytes exchanged 1
+  SELDISK       = 0x09, // Bytes exchanged 1
+  SELTRACK      = 0x0A, // Bytes exchanged 2
+  SELSECT       = 0x0B, // Bytes exchanged 1
+  WRITESECT     = 0x0C, // Bytes exchanged 512
+  SETBANK       = 0x0D, // Bytes exchanged 1
+
+  // Read operations
+  USER_KEY      = 0x80, // Bytes exchanged 1
+  GPIOA_READ    = 0x81, // Bytes exchanged 1
+  GPIOB_READ    = 0x82, // Bytes exchanged 1
+  SYSFLAGS      = 0x83, // Bytes exchanged 1
+  DATETIME      = 0x84, // Bytes exchanged 7
+  ERRDISK       = 0x85, // Bytes exchanged 1
+  READSECT      = 0x86, // Bytes exchanged 512
+  SDMOUNT       = 0x87, // Bytes exchanged 1
+  READ_MILLIS   = 0x88, // Bytes exchanged 4
+
+  // Also signals end of multi-byte transfer
+  NO_OP         = 0xFF  // Bytes exchanged 1
+};
 
 // General purpose variables
 byte          ioAddress;                  // Virtual I/O address. Only two possible addresses are valid (0x00 and 0x01)
 byte          ioData;                     // Data byte used for the I/O operation
-byte          ioOpcode       = 0xFF;      // I/O operation code or Opcode (0xFF means "No Operation")
+byte          ioOpcode       = NO_OP;     // I/O operation code or Opcode (0xFF means "No Operation")
 word          ioByteCnt;                  // Exchanged bytes counter during an I/O operation
 byte          tempByte;                   // Temporary variable (buffer)
 byte          moduleGPIO     = 0;         // Set to 1 if the module is found, 0 otherwise
@@ -267,6 +298,7 @@ word          BootImageSize  = 0;         // Size of the selected flash payload 
 word          BootStrAddr;                // Starting address of the selected program to boot (from flash or SD)
 byte          Z80IntEnFlag   = 0;         // Z80 INT_ enable flag (0 = No INT_ used, 1 = INT_ used for I/O)
 unsigned long timeStamp;                  // Timestamp for led blinking
+unsigned long ioMillis;                   // Used to hold snapshot of millis for READ_MILLIS operation
 char          inChar;                     // Input char from serial
 byte          iCount;                     // Temporary variable (counter)
 byte          clockMode;                  // Z80 clock HI/LO speed selector (0 = 8/10MHz, 1 = 4/5MHz)
@@ -823,7 +855,7 @@ void loop()
         switch (ioOpcode)
         // Execute the requested I/O WRITE Opcode. The 0xFF value is reserved as "No operation".
         {
-          case  0x00:
+          case  USER_LED:
           // USER LED:      
           //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
           //                            ---------------------------------------------------------
@@ -1505,10 +1537,50 @@ void loop()
             //         ERRDISK opcode
 
             ioData = mountSD(&filesysSD);
-          break;          
+          break;
+
+          case READ_MILLIS:
+            // READ_MILLIS(0x88) (Read the number of milliseconds since boot time (millis). Binary values): 
+            //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
+            //                            ---------------------------------------------------------
+            //                I/O DATA 0   D7 D6 D5 D4 D3 D2 D1 D0    byte 3 (MSB)
+            //                I/O DATA 1   D7 D6 D5 D4 D3 D2 D1 D0    byte 2
+            //                I/O DATA 2   D7 D6 D5 D4 D3 D2 D1 D0    byte 1
+            //                I/O DATA 3   D7 D6 D5 D4 D3 D2 D1 D0    byte 0 (LSB)
+            //
+            // NOTE 2: Overread data (more then 7 bytes read) will be = 0
+            if (ioByteCnt == 0)
+            {
+              ioMillis = millis();
+            }
+            switch (ioByteCnt)
+            {
+              case 0:
+                ioData = (ioMillis >> 24) & 0xFF;
+                break;
+
+              case 1:
+                ioData = (ioMillis >> 16) & 0xFF;
+                break;
+
+              case 2:
+                ioData = (ioMillis >> 8) & 0xFF;
+                break;
+                
+              case 3:
+                ioData = ioMillis & 0xFF;
+                break;
+            }
+            ioByteCnt++;
+            break;
           }
-          if ((ioOpcode != 0x84) && (ioOpcode != 0x86)) ioOpcode = 0xFF;  // All done for the single byte opcodes. 
-                                                                          //  Set ioOpcode = "No operation"
+          if ((ioOpcode != DATETIME) &&
+              (ioOpcode != READSECT) &&
+              (ioOpcode != READ_MILLIS))
+          {
+            ioOpcode = NO_OP;  // All done for the single byte opcodes. 
+                              //  Set ioOpcode = "No operation"
+          }
         }
         DDRA = 0xFF;                              // Configure Z80 data bus D0-D7 (PA0-PA7) as output
         PORTA = ioData;                           // Current output on data bus
