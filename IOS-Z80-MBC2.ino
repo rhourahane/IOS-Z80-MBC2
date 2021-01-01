@@ -43,6 +43,9 @@ PetitFS licence:
 /
 /---------------------------------------------------------------------------- */
 
+#define HW_VERSION "A040618"
+#define SW_VERSION "RMH-OS-MENU"
+
 // ------------------------------------------------------------------------------
 //
 // Hardware definitions for A040618 (Z80-MBC2) - Base system
@@ -139,11 +142,11 @@ PetitFS licence:
 // ------------------------------------------------------------------------------
 
 #if F_CPU == 20000000
-  #define CLOCK_LOW   "5"
-  #define CLOCK_HIGH  "10"
+  #define CLOCK_LOW   5
+  #define CLOCK_HIGH  10
 #else
-  #define CLOCK_LOW   "4"
-  #define CLOCK_HIGH  "8"
+  #define CLOCK_LOW   4
+  #define CLOCK_HIGH  8
 #endif
 
 // ------------------------------------------------------------------------------
@@ -377,7 +380,7 @@ void setup()
   
   // Print some system information
   Serial.begin(115200);
-  Serial.println(F("\r\n\nZ80-MBC2 - A040618\r\nIOS - I/O Subsystem - RMH - BIG BUFFER\r\n"));
+  Serial.println(F("\r\n\nZ80-MBC2 - " HW_VERSION "\r\nIOS - I/O Subsystem - " SW_VERSION "\r\n"));
 
   // Print if the input serial buffer is 128 bytes wide (this is needed for xmodem protocol support)
   if (SERIAL_RX_BUFFER_SIZE >= 128) Serial.println(F("IOS: Found extended serial Rx buffer"));
@@ -410,101 +413,80 @@ void setup()
   // Enter in the boot selection menu if USER key was pressed at startup 
   //   or an invalid bootMode code was read from internal EEPROM
   {
-    while (Serial.available() > 0)                // Flush input serial Rx buffer
-    {
-      Serial.read();
-    }
-    Serial.println();
-    Serial.println(F("IOS: Select boot mode or system parameters:"));
-    Serial.println();
-    if (bootMode <= maxBootMode)
-    // Previous valid boot mode read, so enable '0' selection
-    {
-      minBootChar = '0';
-      Serial.print(F(" 0: No change ("));
-      Serial.print(bootMode + 1);
-      Serial.println(F(")"));
-    }
-    Serial.println(F(" 1: Basic"));   
-    Serial.println(F(" 2: Forth"));
-    Serial.print(F(" 3: Load OS from "));
-    printOsName(diskSet);
-    Serial.println(F("\r\n 4: Autoboot"));
-    Serial.println(F(" 5: iLoad"));
-    Serial.print(F(" 6: Change Z80 clock speed (->"));
-    if (clockMode) Serial.print(CLOCK_HIGH);
-    else Serial.print(CLOCK_LOW);
-    Serial.println(F("MHz)"));
-    Serial.print(F(" 7: Toggle CP/M Autoexec (->"));
-    if (!autoexecFlag) Serial.print(F("ON"));
-    else Serial.print(F("OFF"));
-    Serial.println(F(")"));
-    Serial.print(F(" 8: Change "));
-    printOsName(diskSet);
-    Serial.println();
-
-    // If RTC module is present add a menu choice
-    if (foundRTC)
-    {
-      Serial.println(F(" 9: Change RTC time/date"));
-      maxSelChar = '9';
-    }
-
-    // Ask a choice
-    Serial.println();
-    timeStamp = millis();
-    Serial.print(F("Enter your choice >"));
     do
     {
-      blinkIOSled(&timeStamp);
-      inChar = Serial.read();
-    }               
-    while ((inChar < minBootChar) || (inChar > maxSelChar));
-    Serial.print(inChar);
-    Serial.println(F("  Ok"));
-
-    // Make the selected action for the system paramters choice
-    switch (inChar)
-    {
-      case '6':                                   // Change the clock speed of the Z80 CPU
-        clockMode = !clockMode;                   // Toggle Z80 clock speed mode (High/Low)
-        EEPROM.update(clockModeAddr, clockMode);  // Save it to the internal EEPROM
-      break;
-
-      case '7':                                   // Toggle CP/M AUTOEXEC execution on cold boot
-        autoexecFlag = !autoexecFlag;             // Toggle AUTOEXEC executiont status
-        EEPROM.update(autoexecFlagAddr, autoexecFlag); // Save it to the internal EEPROM
-      break;
-
-      case '8':                                   // Change current Disk Set
-        Serial.println(F("\r\nPress CR to accept, ESC to exit or any other key to change"));
-        iCount = diskSet;
-        do
-        {
-          // Print the OS name of the next Disk Set
-          iCount = (iCount + 1) % maxDiskSet;
-          Serial.print(F("\r ->"));
-          printOsName(iCount);
-          Serial.print(F("                 \r"));
-          while (Serial.available() > 0) Serial.read();   // Flush serial Rx buffer
-          while(Serial.available() < 1) blinkIOSled(&timeStamp);  // Wait a key
-          inChar = Serial.read();
-        }
-        while ((inChar != 13) && (inChar != 27)); // Continue until a CR or ESC is pressed
-        Serial.println();
-        Serial.println();
-        if (inChar == 13)                         // Set and store the new Disk Set if required
-        {
-           diskSet = iCount;
-           EEPROM.update(diskSetAddr, iCount);
-        }
-      break;
-
-      case '9':                                   // Change RTC Date/Time
-        ChangeRTC();                              // Change RTC Date/Time if requested
-      break;
-    };
-    
+      while (Serial.available() > 0)                // Flush input serial Rx buffer
+      {
+        Serial.read();
+      }
+      Serial.println();
+      Serial.println(F("IOS: Select boot mode or system parameters:"));
+      Serial.println();
+      if (bootMode <= maxBootMode)
+      // Previous valid boot mode read, so enable '0' selection
+      {
+        minBootChar = '0';
+        Serial.printf(F(" 0: No change (%d)\r\n"), bootMode + 1);
+      }
+      Serial.println(F(" 1: Basic"));   
+      Serial.println(F(" 2: Forth"));
+      Serial.print(F(" 3: Load OS from "));
+      printOsName(diskSet);
+      Serial.println(F("\r\n 4: Autoboot"));
+      Serial.println(F(" 5: iLoad"));
+      Serial.printf(F(" 6: Change Z80 clock speed (->%dMHz)\r\n"), clockMode ? CLOCK_HIGH : CLOCK_LOW);
+      Serial.print(F(" 7: Toggle CP/M Autoexec (->"));
+      if (!autoexecFlag) Serial.print(F("ON"));
+      else Serial.print(F("OFF"));
+      Serial.println(F(")"));
+      Serial.print(F(" 8: Change "));
+      printOsName(diskSet);
+      Serial.println();
+  
+      // If RTC module is present add a menu choice
+      if (foundRTC)
+      {
+        Serial.println(F(" 9: Change RTC time/date"));
+        maxSelChar = '9';
+      }
+  
+      // Ask a choice
+      Serial.println();
+      timeStamp = millis();
+      Serial.print(F("Enter your choice >"));
+      do
+      {
+        blinkIOSled(&timeStamp);
+        inChar = Serial.read();
+      }               
+      while ((inChar < minBootChar) || (inChar > maxSelChar));
+      Serial.print(inChar);
+      Serial.println(F("  Ok"));
+  
+      // Make the selected action for the system paramters choice
+      switch (inChar)
+      {
+        case '6':                                   // Change the clock speed of the Z80 CPU
+          clockMode = !clockMode;                   // Toggle Z80 clock speed mode (High/Low)
+          EEPROM.update(clockModeAddr, clockMode);  // Save it to the internal EEPROM
+        break;
+  
+        case '7':                                   // Toggle CP/M AUTOEXEC execution on cold boot
+          autoexecFlag = !autoexecFlag;             // Toggle AUTOEXEC executiont status
+          EEPROM.update(autoexecFlagAddr, autoexecFlag); // Save it to the internal EEPROM
+        break;
+  
+        case '8':                                   // Change current Disk Set
+          diskSet = ChangeDiskSet(diskSet);
+          EEPROM.update(diskSetAddr, diskSet);
+        break;
+  
+        case '9':                                   // Change RTC Date/Time
+          ChangeRTC();                              // Change RTC Date/Time if requested
+        break;
+      }
+    } while (inChar > '5');
+        
     // Save selectd boot program if changed
     bootMode = inChar - '1';                      // Calculate bootMode from inChar
     if (bootMode <= maxBootMode) EEPROM.update(bootModeAddr, bootMode); // Save to the internal EEPROM if required
@@ -2229,4 +2211,50 @@ void printOsName(byte currentDiskSet)
     Serial.print((const char *)bufferSD);
     Serial.print(F(")"));
   }
+}
+
+byte ChangeDiskSet(byte curDiskSet)
+{
+  byte newSet = maxDiskSet + 1;
+  Serial.println();
+  Serial.print(F("Current selection: "));
+  printOsName(curDiskSet);
+  Serial.println();
+  Serial.println();
+  do
+  {
+    for (int setNum = 0; setNum != maxDiskSet; ++setNum)
+    {
+      printOsName(setNum);
+      Serial.println();
+    }
+    Serial.printf(F("Type number to select disk set 0-%d or ESC to exit:"), maxDiskSet - 1);
+    while (Serial.available() > 0)
+    {
+      Serial.read();   // Flush serial Rx buffer
+    }
+    while(Serial.available() < 1)
+    {
+      blinkIOSled(&timeStamp);  // Wait a key
+    }
+    char inChar = Serial.read();
+    if (isHexadecimalDigit(inChar))
+    {
+      newSet = inChar - '0';
+      if (newSet > 9)
+      {
+        newSet = inChar - 'A' + 10;
+        if (newSet > 15)
+        {
+          newSet = inChar - 'a' + 10;
+        }
+      }
+    }
+    else if (inChar == 27)
+    {
+      newSet = curDiskSet;
+    }
+  } while (newSet >= maxDiskSet);
+  Serial.println();
+  return newSet;
 }
