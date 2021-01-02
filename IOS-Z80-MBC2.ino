@@ -195,7 +195,7 @@ const byte    clockModeAddr = 13;         // Internal EEPROM address for the Z80
                                           //  (1 = low speed, 0 = high speed)
 const byte    diskSetAddr  = 14;          // Internal EEPROM address for the current Disk Set [0..9]
 const byte    maxDiskNum   = 99;          // Max number of virtual disks
-const byte    maxDiskSetNum = 16;         // Restrict disk set numbers to 0-F
+const byte    maxDiskSetNum = 10;         // Restrict disk set numbers to 0-9
 
 // Z80 programs images into flash and related constants
 const word  boot_A_StrAddr = 0xfd10;      // Payload A image starting address (flash)
@@ -241,7 +241,7 @@ const byte  boot_A_[] PROGMEM = {         // Payload A image (S200718 iLoad)
   0x00, 0xC9, 0xDB, 0x01, 0xFE, 0xFF, 0xCA, 0x72, 0xFF, 0xC9
   };
 
-const byte * const flahBootTable[1] PROGMEM = {boot_A_}; // Payload pointers table (flash)
+const byte * const flashBootTable[1] PROGMEM = {boot_A_}; // Payload pointers table (flash)
 
 // ------------------------------------------------------------------------------
 //
@@ -547,7 +547,7 @@ void setup()
     break;
     
     case 4:                                       // Load iLoad from flash
-      BootImage = (byte *) pgm_read_word (&flahBootTable[0]); 
+      BootImage = (byte *) pgm_read_word (&flashBootTable[0]); 
       BootImageSize = sizeof(boot_A_);
       BootStrAddr = boot_A_StrAddr;
     break;
@@ -566,8 +566,7 @@ void setup()
     // DEBUG ----------------------------------
     if (debug)
     {
-      Serial.print(F("DEBUG: Injected JP 0x"));
-      Serial.println(BootStrAddr, HEX);
+      Serial.printf(F("DEBUG: Injected JP 0x%0X\n\r"), BootStrAddr);
     }
     // DEBUG END ------------------------------
     //
@@ -579,10 +578,8 @@ void setup()
   // DEBUG ----------------------------------
   if (debug)
   {
-    Serial.print(F("DEBUG: Flash BootImageSize = "));
-    Serial.println(BootImageSize);
-    Serial.print(F("DEBUG: BootStrAddr = "));
-    Serial.println(BootStrAddr, HEX);    
+    Serial.printf(F("DEBUG: Flash BootImageSize = %d\n\r"), BootImageSize);
+    Serial.printf(F("DEBUG: BootStrAddr = 0x%0X\n\r"), BootStrAddr);
   }
   // DEBUG END ------------------------------
   //
@@ -1513,18 +1510,6 @@ void loop()
 
 // ------------------------------------------------------------------------------
 
-
-
-void printBinaryByte(byte value)
-{
-  for (byte mask = 0x80; mask; mask >>= 1)
-  {
-    Serial.print((mask & value) ? '1' : '0');
-  }
-}
-
-// ------------------------------------------------------------------------------
-
 void serialEvent()
 // Set INT_ to ACTIVE if there are received chars from serial to read and if the interrupt generation is enabled
 {
@@ -1693,27 +1678,11 @@ void printDateTime(byte readSourceFlag)
 //    If readSourceFlag = 0 the RTC read is not done
 //    If readSourceFlag = 1 the RTC read is done (global variables are updated)
 {
-  if (readSourceFlag) readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
-  print2digit(day);
-  Serial.print(F("/"));
-  print2digit(month);
-  Serial.print(F("/"));
-  print2digit(year);
-  Serial.print(F(" "));
-  print2digit(hours);
-  Serial.print(F(":"));
-  print2digit(minutes);
-  Serial.print(F(":"));
-  print2digit(seconds);
-}
-
-// ------------------------------------------------------------------------------
-
-void print2digit(byte data)
-// Print a byte [0..99] using 2 digit with leading zeros if needed
-{
-  if (data < 10) Serial.print(F("0"));
-  Serial.print(data);
+  if (readSourceFlag)
+  {
+    readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
+  }
+  Serial.printf(F("%2d/%2d/%2d %2d:%2d:%2d"), day, month, year, hours, minutes, seconds);
 }
 
 // ------------------------------------------------------------------------------
@@ -1732,52 +1701,42 @@ byte isLeapYear(byte yearXX)
 void ChangeRTC()
 // Change manually the RTC Date/Time from keyboard
 {
-  byte    leapYear;   //  Set to 1 if the selected year is bissextile, 0 otherwise [0..1]
-
   // Read RTC
   readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
 
   // Change RTC date/time from keyboard
-  tempByte = 0;
+  byte partIndex = 0;
+  char inChar = 0;
   Serial.println(F("\nIOS: RTC manual setting:"));
   Serial.println(F("\nPress T/U to increment +10/+1 or CR to accept"));
   do
   {
     do
     {
-      Serial.print(F(" "));
-      switch (tempByte)
+      switch (partIndex)
       {
         case 0:
-          Serial.print(F("Year -> "));
-          print2digit(year);
+          Serial.printf(F(" Year -> %02d"), year);
         break;
         
         case 1:
-          Serial.print(F("Month -> "));
-          print2digit(month);
+          Serial.printf(F(" Month -> %02d"), month);
         break;
 
         case 2:
-          Serial.print(F("             "));
-          Serial.write(13);
-          Serial.print(F(" Day -> "));
-          print2digit(day);
+          Serial.printf(F(" Day -> %02d  "), day);
         break;
 
         case 3:
-          Serial.print(F("Hours -> "));
-          print2digit(hours);
+          Serial.printf(F(" Hours -> %02d"), hours);
         break;
 
         case 4:
-          Serial.print(F("Minutes -> "));
-          print2digit(minutes);
+          Serial.printf(F(" Minutes -> %02d"), minutes);
         break;
 
         case 5:
-          Serial.print(F("Seconds -> "));
-          print2digit(seconds);
+          Serial.printf(F(" Seconds -> %02d"), seconds);
         break;
       }
 
@@ -1785,13 +1744,14 @@ void ChangeRTC()
       do
       {
         blinkIOSled(&timeStamp);
-        inChar = Serial.read();
+        inChar = toupper(Serial.read());
       }
-      while ((inChar != 'u') && (inChar != 'U') && (inChar != 't') && (inChar != 'T') && (inChar != 13));
+      while ((inChar != 'U') && (inChar != 'T') && (inChar != 13));
       
-      if ((inChar == 'u') || (inChar == 'U'))
-      // Change units
-        switch (tempByte)
+      if ((inChar == 'U'))
+      {
+        // Change units
+        switch (partIndex)
         {
           case 0:
             year++;
@@ -1830,9 +1790,11 @@ void ChangeRTC()
             if (seconds > 59) seconds = 0;
           break;
         }
-      if ((inChar == 't') || (inChar == 'T'))
-      // Change tens
-        switch (tempByte)
+      }
+      if ((inChar == 'T'))
+      {
+        // Change tens
+        switch (partIndex)
         {
           case 0:
             year = year + 10;
@@ -1865,12 +1827,13 @@ void ChangeRTC()
             if (seconds > 59) seconds = seconds - (seconds / 10 ) * 10;
           break;
         }
+      }
       Serial.write(13);
     }
     while (inChar != 13);
-    tempByte++;
+    partIndex++;
   }
-  while (tempByte < 6);  
+  while (partIndex < 6);  
 
   // Write new date/time into the RTC
   writeRTC(seconds, minutes, hours, day, month, year);
@@ -2218,17 +2181,9 @@ byte ChangeDiskSet(byte curDiskSet)
       blinkIOSled(&timeStamp);  // Wait a key
     }
     char inChar = Serial.read();
-    if (isHexadecimalDigit(inChar))
+    if (isDigit(inChar))
     {
       newSet = inChar - '0';
-      if (newSet > 9)
-      {
-        newSet = inChar - 'A' + 10;
-        if (newSet > 15)
-        {
-          newSet = inChar - 'a' + 10;
-        }
-      }
     }
     else if (inChar == 27)
     {
@@ -2310,28 +2265,12 @@ OsBootInfo GetDiskSetBootInfo(byte setNum)
 
 const char *MkOsDiskSet(byte setNum)
 {
-    if (setNum > 9)
-    {
-      OsName[2] = setNum - 10 + 'A';
-    }
-    else
-    {
-      OsName[2] = setNum + '0';
-    }
-
+    OsName[2] = setNum + '0';
     return OsName;
 }
 
 const char *MkTxtDiskSet(byte setNum)
 {
-    if (setNum > 9)
-    {
-      OsNameTx[2] = setNum - 10 + 'A';
-    }
-    else
-    {
-      OsNameTx[2] = setNum + '0';
-    }
-
+    OsNameTx[2] = setNum + '0';
     return OsNameTx;
 }
