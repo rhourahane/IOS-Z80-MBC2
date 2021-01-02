@@ -544,7 +544,6 @@ void setup()
       BootInfo = GetDiskSetBootInfo(diskSet);
       fileNameSD = BootInfo.BootFile;
       BootStrAddr = BootInfo.BootAddr;
-      Serial.printf(F("Booting file fileNameSD %s BootStrAddr %x\n\r"), fileNameSD, BootStrAddr);
     break;
     
     case 3:                                       // Load AUTOBOOT.BIN from SD (load an user executable binary file)
@@ -632,9 +631,7 @@ void setup()
     while (errCodeSD);
 
     // Read the selected file from SD and load it into RAM until an EOF is reached
-    Serial.print(F("IOS: Loading boot program ("));
-    Serial.print(fileNameSD);
-    Serial.print(F(")..."));
+    Serial.printf(F("IOS: Loading boot program (%s@0x%04x)..."), fileNameSD, BootStrAddr);
     do
     // If an error occurs repeat until error disappears (or the user forces a reset)
     {
