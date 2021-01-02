@@ -124,7 +124,8 @@ PetitFS licence:
 #define   COSFN         "COS.BIN"         // Collapse Os loader
 #define   AUTOFN        "AUTOBOOT.BIN"    // Auotobbot.bin file
 #define   Z80DISK       "DSxNyy.DSK"      // Generic Z80 disk name (from DS0N00.DSK to DS9N99.DSK)
-#define   DS_OSNAME     "DSxNAM.DAT"      // File with the OS name for Disk Set "x" (from DS0NAM.DAT to DS9NAM.DAT)
+#define   DS_OSNAME     "DSxNAM.DAT"      // File with the OS name for Disk Set "x" (from DS0NAM.DAT to DSFNAM.DAT)
+#define   TX_OSNAME     "DSxNAM.TXT"      // File with the OS name for Disk Set "x" (from DS0NAM.TXT to DSFNAM.TXT)
 #define   BASSTRADDR    0x0000            // Starting address for the stand-alone Basic interptreter
 #define   FORSTRADDR    0x0100            // Starting address for the stand-alone Forth interptreter
 #define   CPM22CBASE    0xD200            // CBASE value for CP/M 2.2
@@ -134,6 +135,22 @@ PetitFS licence:
 #define   UCSDSTRADDR   0x0000            // Starting address for the UCSD Pascal loader
 #define   COSSTRADDR    0x0000            // Starting address for the Collapse Os loader
 #define   AUTSTRADDR    0x0000            // Starting address for the AUTOBOOT.BIN file
+
+struct OsBootInfo
+{
+  char OsName[16];
+  char BootFile[16];
+  word BootAddr;
+};
+
+const OsBootInfo DefaultOsInfo[] PROGMEM = {
+  { "CP/M 2.2", CPMFN, CPMSTRADDR },
+  { "QP/M 2.71", QPMFN, QPMSTRADDR },
+  { "CP/M 3.0", CPM3FN, CPM3STRADDR },
+  { "UCSD Pascal", UCSDFN, UCSDSTRADDR },
+  { "Collapse Os", COSFN, COSSTRADDR }
+};
+const byte MaxDefaultOsInfo = sizeof(DefaultOsInfo)/sizeof(OsBootInfo);
 
 // ------------------------------------------------------------------------------
 //
@@ -180,7 +197,7 @@ const byte    clockModeAddr = 13;         // Internal EEPROM address for the Z80
                                           //  (1 = low speed, 0 = high speed)
 const byte    diskSetAddr  = 14;          // Internal EEPROM address for the current Disk Set [0..9]
 const byte    maxDiskNum   = 99;          // Max number of virtual disks
-const byte    maxDiskSet   = 5;           // Number of configured Disk Sets
+const byte    maxDiskSetNum = 16;         // Restrict disk set numbers to 0-F
 
 // Z80 programs images into flash and related constants
 const word  boot_A_StrAddr = 0xfd10;      // Payload A image starting address (flash)
@@ -252,6 +269,7 @@ byte          iCount;                     // Temporary variable (counter)
 byte          clockMode;                  // Z80 clock HI/LO speed selector (0 = 8/10MHz, 1 = 4/5MHz)
 byte          LastRxIsEmpty;              // "Last Rx char was empty" flag. Is set when a serial Rx operation was done
                                           // when the Rx buffer was empty
+OsBootInfo    BootInfo;
 
 // DS3231 RTC variables
 byte          foundRTC;                   // Set to 1 if RTC is found, 0 otherwise
@@ -276,12 +294,14 @@ byte          numReadBytes;               // Number of read bytes after a readSD
 // Disk emulation on SD
 char          diskName[11]    = Z80DISK;  // String used for virtual disk file name
 char          OsName[11]      = DS_OSNAME;// String used for file holding the OS name
+char          OsNameTx[11]    = TX_OSNAME;// String used for file holding the OS boot details in text Name, Boot File, Boot Address(Hex)
 word          trackSel;                   // Store the current track number [0..511]
 byte          sectSel;                    // Store the current sector number [0..31]
 byte          diskErr         = 19;       // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
-                                          //  error code
+                                          // error code
 byte          numWriBytes;                // Number of written bytes after a writeSD() call
 byte          diskSet;                    // Current "Disk Set"
+byte          maxDiskSet      = 5;        // Number of configured Disk Sets (default to number of built in disk sets)
 
 // ------------------------------------------------------------------------------
 
@@ -409,16 +429,17 @@ void setup()
   // Boot selection and system parameters menu if requested
   mountSD(&filesysSD); mountSD(&filesysSD);       // Try to muont the SD volume
   bootMode = EEPROM.read(bootModeAddr);           // Read the previous stored boot mode
+
+  // Find the maximum number of disk sets
+  maxDiskSet = FindLastDiskSet();
+  
   if ((bootSelection == 1 ) || (bootMode > maxBootMode))
   // Enter in the boot selection menu if USER key was pressed at startup 
   //   or an invalid bootMode code was read from internal EEPROM
   {
     do
     {
-      while (Serial.available() > 0)                // Flush input serial Rx buffer
-      {
-        Serial.read();
-      }
+      FlushRxBuffer();
       Serial.println();
       Serial.println(F("IOS: Select boot mode or system parameters:"));
       Serial.println();
@@ -436,7 +457,7 @@ void setup()
       Serial.println(F(" 5: iLoad"));
       Serial.printf(F(" 6: Change Z80 clock speed (->%dMHz)\r\n"), clockMode ? CLOCK_HIGH : CLOCK_LOW);
       Serial.print(F(" 7: Toggle CP/M Autoexec (->"));
-      if (!autoexecFlag) Serial.print(F("ON"));
+      if (autoexecFlag) Serial.print(F("ON"));
       else Serial.print(F("OFF"));
       Serial.println(F(")"));
       Serial.print(F(" 8: Change "));
@@ -520,33 +541,10 @@ void setup()
     break;
 
     case 2:                                       // Load an OS from current Disk Set on SD
-      switch (diskSet)
-      {
-      case 0:                                     // CP/M 2.2
-        fileNameSD = CPMFN;
-        BootStrAddr = CPMSTRADDR;
-      break;
-
-      case 1:                                     // QP/M 2.71
-        fileNameSD = QPMFN;
-        BootStrAddr = QPMSTRADDR;
-      break;
-
-      case 2:                                     // CP/M 3.0
-        fileNameSD = CPM3FN;
-        BootStrAddr = CPM3STRADDR;
-      break;
-
-      case 3:                                     // UCSD Pascal
-        fileNameSD = UCSDFN;
-        BootStrAddr = UCSDSTRADDR;
-      break;
-
-      case 4:                                     // Collapse Os
-        fileNameSD = COSFN;
-        BootStrAddr = COSSTRADDR;
-      break;
-      }
+      BootInfo = GetDiskSetBootInfo(diskSet);
+      fileNameSD = BootInfo.BootFile;
+      BootStrAddr = BootInfo.BootAddr;
+      Serial.printf(F("Booting file fileNameSD %s BootStrAddr %x\n\r"), fileNameSD, BootStrAddr);
     break;
     
     case 3:                                       // Load AUTOBOOT.BIN from SD (load an user executable binary file)
@@ -691,11 +689,7 @@ void setup()
   Serial.println(F("IOS: Z80 is running from now"));
   Serial.println();
 
-  // Flush serial Rx buffer
-  while (Serial.available() > 0) 
-  {
-    Serial.read();
-  }
+  FlushRxBuffer();
 
   // Leave the Z80 CPU running
   delay(1);                                       // Just to be sure...
@@ -2183,12 +2177,19 @@ void printErrSD(byte opType, byte errCode, const char* fileName)
   }
 }
 
-// ------------------------------------------------------------------------------
+void FlushRxBuffer()
+{
+  while (Serial.available() > 0)
+  {
+    Serial.read();
+  }
+}
 
 void waitKey()
 // Wait a key to continue
 {
-  while (Serial.available() > 0) Serial.read();   // Flush serial Rx buffer
+  FlushRxBuffer();
+  
   Serial.println(F("IOS: Check SD and press a key to repeat\r\n"));
   while(Serial.available() < 1);
 }
@@ -2201,8 +2202,7 @@ void printOsName(byte currentDiskSet)
 {
   Serial.print(F("Disk Set "));
   Serial.print(currentDiskSet);
-  OsName[2] = currentDiskSet + 48;    // Set the Disk Set
-  openSD(OsName);                     // Open file with the OS name
+  openSD(MkOsDiskSet(currentDiskSet));                     // Open file with the OS name
   readSD(bufferSD, &numReadBytes);    // Read the OS name
   if (numReadBytes > 0)
   // Print the OS name
@@ -2229,10 +2229,7 @@ byte ChangeDiskSet(byte curDiskSet)
       Serial.println();
     }
     Serial.printf(F("Type number to select disk set 0-%d or ESC to exit:"), maxDiskSet - 1);
-    while (Serial.available() > 0)
-    {
-      Serial.read();   // Flush serial Rx buffer
-    }
+    FlushRxBuffer();
     while(Serial.available() < 1)
     {
       blinkIOSled(&timeStamp);  // Wait a key
@@ -2257,4 +2254,73 @@ byte ChangeDiskSet(byte curDiskSet)
   } while (newSet >= maxDiskSet);
   Serial.println();
   return newSet;
+}
+
+byte FindLastDiskSet()
+{
+  for (int diskSet = 0; diskSet != maxDiskSetNum; ++diskSet)
+  {
+    byte result = openSD(MkOsDiskSet(diskSet));
+    Serial.printf(F("Checking file %s result %d\n\r"), OsName, result);
+    if (result != 0)
+    {
+      Serial.printf(F("Setting maxDiskSet to %d\n\r"), diskSet);
+      return diskSet;
+    }
+  }
+
+  return diskSet;
+}
+
+OsBootInfo GetDiskSetBootInfo(byte diskSet)
+{
+  if (diskSet < MaxDefaultOsInfo)
+  {
+    OsBootInfo tmpInfo;
+    memcpy_P(&tmpInfo, &(DefaultOsInfo[diskSet]), sizeof(OsBootInfo));
+    return tmpInfo;
+  }
+
+  byte result = openSD(MkOsDiskSet(diskSet));
+  if (result != 0)
+  {
+    readSD(bufferSD, &numReadBytes);
+    if (numReadBytes < sizeof(OsBootInfo))
+    {
+      const char *txtFile = MkTxtDiskSet(diskSet);
+      Serial.printf(F("Looking for test file %s\n\r"), txtFile);
+    }
+    else
+    {
+      return *((OsBootInfo *)bufferSD);
+    }
+  }
+}
+
+const char *MkOsDiskSet(byte diskSet)
+{
+    if (diskSet > 9)
+    {
+      OsName[2] = diskSet - 10 + 'A';
+    }
+    else
+    {
+      OsName[2] = diskSet + '0';
+    }
+
+    return OsName;
+}
+
+const char *MkTxtDiskSet(byte diskSet)
+{
+    if (diskSet > 9)
+    {
+      OsNameTx[2] = diskSet - 10 + 'A';
+    }
+    else
+    {
+      OsNameTx[2] = diskSet + '0';
+    }
+
+    return OsNameTx;
 }
