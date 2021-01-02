@@ -171,8 +171,6 @@ const byte MaxDefaultOsInfo = sizeof(DefaultOsInfo)/sizeof(OsBootInfo);
 //  Libraries
 //
 // ------------------------------------------------------------------------------
-
-#include <avr/pgmspace.h>                 // Needed for PROGMEM
 #include "Wire.h"                         // Needed for I2C bus
 #include <EEPROM.h>                       // Needed for internal EEPROM R/W
 #include "PetitFS.h"                      // Light handler for FAT16 and FAT32 filesystems on SD
@@ -385,14 +383,6 @@ void setup()
   }
   clockMode = EEPROM.read(clockModeAddr);         // Read the previous stored value
 
-  // Read the stored Disk Set. If not valid set it to 0
-  diskSet = EEPROM.read(diskSetAddr);
-  if (diskSet >= maxDiskSet) 
-  {
-    EEPROM.update(diskSetAddr, 0);
-    diskSet =0;
-  }
-
   // Initialize the EXP_PORT (I2C) and search for "known" optional modules
   Wire.begin();                                   // Wake up I2C bus
   Wire.beginTransmission(GPIOEXP_ADDR);
@@ -406,10 +396,7 @@ void setup()
   if (SERIAL_RX_BUFFER_SIZE >= 128) Serial.println(F("IOS: Found extended serial Rx buffer"));
 
   // Print the Z80 clock speed mode
-  Serial.print(F("IOS: Z80 clock set at "));
-  if (clockMode) Serial.print(CLOCK_LOW);
-  else Serial.print(CLOCK_HIGH);
-  Serial.println(F("MHz"));
+  Serial.printf(F("IOS: Z80 clock set at %dMHz\n\r"), clockMode ? CLOCK_LOW : CLOCK_HIGH);
 
   // Print RTC and GPIO informations if found
   foundRTC = autoSetRTC();                        // Check if RTC is present and initialize it as needed
@@ -432,7 +419,15 @@ void setup()
 
   // Find the maximum number of disk sets
   maxDiskSet = FindLastDiskSet();
-  
+
+  // Read the stored Disk Set. If not valid set it to 0
+  diskSet = EEPROM.read(diskSetAddr);
+  if (diskSet >= maxDiskSet) 
+  {
+    EEPROM.update(diskSetAddr, 0);
+    diskSet =0;
+  }
+
   if ((bootSelection == 1 ) || (bootMode > maxBootMode))
   // Enter in the boot selection menu if USER key was pressed at startup 
   //   or an invalid bootMode code was read from internal EEPROM
@@ -2197,17 +2192,8 @@ void printOsName(byte currentDiskSet)
 // Print the current Disk Set number and the OS name, if it is defined.
 // The OS name is inside the file defined in DS_OSNAME
 {
-  Serial.print(F("Disk Set "));
-  Serial.print(currentDiskSet);
-  openSD(MkOsDiskSet(currentDiskSet));                     // Open file with the OS name
-  readSD(bufferSD, &numReadBytes);    // Read the OS name
-  if (numReadBytes > 0)
-  // Print the OS name
-  {
-    Serial.print(F(" ("));
-    Serial.print((const char *)bufferSD);
-    Serial.print(F(")"));
-  }
+  OsBootInfo bootInfo = GetDiskSetBootInfo(currentDiskSet);
+  Serial.printf(F("Disk Set %1X (%s)"), currentDiskSet, bootInfo.OsName);
 }
 
 byte ChangeDiskSet(byte curDiskSet)
@@ -2222,10 +2208,10 @@ byte ChangeDiskSet(byte curDiskSet)
   {
     for (int setNum = 0; setNum != maxDiskSet; ++setNum)
     {
-      printOsName(setNum);
-      Serial.println();
+      OsBootInfo tmpInfo = GetDiskSetBootInfo(setNum);
+      Serial.printf(F(" %1X: Disk Set %1X (%s)\n\r"), setNum, setNum, tmpInfo.OsName);
     }
-    Serial.printf(F("Type number to select disk set 0-%d or ESC to exit:"), maxDiskSet - 1);
+    Serial.print(F("Enter your choice or ESC to return>"));
     FlushRxBuffer();
     while(Serial.available() < 1)
     {
@@ -2249,74 +2235,102 @@ byte ChangeDiskSet(byte curDiskSet)
       newSet = curDiskSet;
     }
   } while (newSet >= maxDiskSet);
-  Serial.println();
+  Serial.println(F("   Ok"));
   return newSet;
 }
 
 byte FindLastDiskSet()
 {
-  for (int diskSet = 0; diskSet != maxDiskSetNum; ++diskSet)
+  for (int setNum = 0; setNum != maxDiskSetNum; ++setNum)
   {
-    byte result = openSD(MkOsDiskSet(diskSet));
-    Serial.printf(F("Checking file %s result %d\n\r"), OsName, result);
-    if (result != 0)
+    OsBootInfo bootInfo = GetDiskSetBootInfo(setNum);
+    if (bootInfo.OsName[0] != '\0')
     {
-      Serial.printf(F("Setting maxDiskSet to %d\n\r"), diskSet);
-      return diskSet;
+        Serial.printf(F("IOS: Found Disk Set %1X (%s)\n\r"), setNum, bootInfo.OsName);
+    }
+    else
+    {
+      return setNum;
     }
   }
 
-  return diskSet;
+  return maxDiskSetNum;
 }
 
-OsBootInfo GetDiskSetBootInfo(byte diskSet)
+OsBootInfo GetDiskSetBootInfo(byte setNum)
 {
-  if (diskSet < MaxDefaultOsInfo)
+  if (setNum < MaxDefaultOsInfo)
   {
     OsBootInfo tmpInfo;
-    memcpy_P(&tmpInfo, &(DefaultOsInfo[diskSet]), sizeof(OsBootInfo));
+    memcpy_P(&tmpInfo, &(DefaultOsInfo[setNum]), sizeof(OsBootInfo));
     return tmpInfo;
   }
 
-  byte result = openSD(MkOsDiskSet(diskSet));
-  if (result != 0)
+  OsBootInfo tmpInfo = {0, 0, 0};
+  const char *binName = MkOsDiskSet(setNum);
+  byte result = openSD(binName);
+  if (result == 0)
   {
     readSD(bufferSD, &numReadBytes);
-    if (numReadBytes < sizeof(OsBootInfo))
+    return *((OsBootInfo *)bufferSD);
+  }
+  else
+  {
+    const char *txtName = MkTxtDiskSet(setNum);
+    result = openSD(txtName);
+    if (result == 0)
     {
-      const char *txtFile = MkTxtDiskSet(diskSet);
-      Serial.printf(F("Looking for test file %s\n\r"), txtFile);
-    }
-    else
-    {
-      return *((OsBootInfo *)bufferSD);
+      readSD(bufferSD, &numReadBytes);
+      bufferSD[numReadBytes] = '\0';
+      const char* token = strtok((char *)bufferSD, "\n\r");
+      if (token != NULL)
+      {
+        strncpy(tmpInfo.OsName, token, sizeof(tmpInfo.OsName));
+        tmpInfo.OsName[sizeof(tmpInfo.OsName) - 1] = '\0';
+      }
+      token = strtok(NULL, "\n\r");
+      if (token != NULL)
+      {
+        strncpy(tmpInfo.BootFile, token, sizeof(tmpInfo.BootFile));
+        tmpInfo.BootFile[sizeof(tmpInfo.BootFile) - 1] = '\0';
+      }
+      token = strtok(NULL, "\n\r");
+      if (token != NULL)
+      {
+        tmpInfo.BootAddr = strtol(token, NULL, 0);
+      }
+
+      // The initial intent was to save tmpInfo into the .DAT file to save 
+      // parsing the text file each time. Unfortunately PetitFS can't create
+      // or expand files so this is not possible.
     }
   }
+  return tmpInfo;
 }
 
-const char *MkOsDiskSet(byte diskSet)
+const char *MkOsDiskSet(byte setNum)
 {
-    if (diskSet > 9)
+    if (setNum > 9)
     {
-      OsName[2] = diskSet - 10 + 'A';
+      OsName[2] = setNum - 10 + 'A';
     }
     else
     {
-      OsName[2] = diskSet + '0';
+      OsName[2] = setNum + '0';
     }
 
     return OsName;
 }
 
-const char *MkTxtDiskSet(byte diskSet)
+const char *MkTxtDiskSet(byte setNum)
 {
-    if (diskSet > 9)
+    if (setNum > 9)
     {
-      OsNameTx[2] = diskSet - 10 + 'A';
+      OsNameTx[2] = setNum - 10 + 'A';
     }
     else
     {
-      OsNameTx[2] = diskSet + '0';
+      OsNameTx[2] = setNum + '0';
     }
 
     return OsNameTx;
