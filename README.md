@@ -10,6 +10,6 @@ This version has been updated with the following modifications:
 Improvements I intend to make:
 * Add new op code to allow reading of millis
 * Provide an interface to allow Z80 code to make IO requests to the I2C bus.
-* Change to use standard SD library to access the SD card.
+* Change to use standard SD library to access the SD card. This would allow creating/expanding files on the SD card. This might allow saving AutoLoad settings, creation of a CP/M app to read/write FAT files via IOS and more.
 * Remove hardcoded information about OSes in disk sets and move the information into the .DAT file. This should mean being able to add new disk sets without having to change the version of IOS.
 
