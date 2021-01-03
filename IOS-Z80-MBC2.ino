@@ -450,7 +450,7 @@ void setup()
       printOsName(diskSet);
       Serial.println(F("\r\n 4: Autoboot"));
       Serial.println(F(" 5: iLoad"));
-      Serial.printf(F(" 6: Change Z80 clock speed (->%dMHz)\r\n"), clockMode ? CLOCK_HIGH : CLOCK_LOW);
+      Serial.printf(F(" 6: Change Z80 clock speed (->%dMHz)\r\n"), clockMode ? CLOCK_LOW : CLOCK_HIGH);
       Serial.print(F(" 7: Toggle CP/M Autoexec (->"));
       if (autoexecFlag) Serial.print(F("ON"));
       else Serial.print(F("OFF"));
@@ -673,7 +673,7 @@ void setup()
   TCCR2 &= ~(1 << WGM20);
   TCCR2 |= (1 <<  COM20);                         // Set "toggle OC2 on compare match"
   TCCR2 &= ~(1 << COM21);
-  OCR2 = clockMode;                               // Set the compare value to toggle OC2 (0 = low or 1 = high)
+  OCR2 = clockMode;                               // Set the compare value to toggle OC2 (0 = high or 1 = low)
   pinMode(CLK, OUTPUT);                           // Set OC2 as output and start to output the clock
   Serial.println(F("IOS: Z80 is running from now"));
   Serial.println();
