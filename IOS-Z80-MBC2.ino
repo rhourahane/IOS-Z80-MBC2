@@ -43,6 +43,9 @@ PetitFS licence:
 /
 /---------------------------------------------------------------------------- */
 
+#define HW_VERSION "A040618"
+#define SW_VERSION "RMH-OS-MENU"
+
 // ------------------------------------------------------------------------------
 //
 // Hardware definitions for A040618 (Z80-MBC2) - Base system
@@ -121,7 +124,8 @@ PetitFS licence:
 #define   COSFN         "COS.BIN"         // Collapse Os loader
 #define   AUTOFN        "AUTOBOOT.BIN"    // Auotobbot.bin file
 #define   Z80DISK       "DSxNyy.DSK"      // Generic Z80 disk name (from DS0N00.DSK to DS9N99.DSK)
-#define   DS_OSNAME     "DSxNAM.DAT"      // File with the OS name for Disk Set "x" (from DS0NAM.DAT to DS9NAM.DAT)
+#define   DS_OSNAME     "DSxNAM.DAT"      // File with the OS name for Disk Set "x" (from DS0NAM.DAT to DSFNAM.DAT)
+#define   TX_OSNAME     "DSxNAM.TXT"      // File with the OS name for Disk Set "x" (from DS0NAM.TXT to DSFNAM.TXT)
 #define   BASSTRADDR    0x0000            // Starting address for the stand-alone Basic interptreter
 #define   FORSTRADDR    0x0100            // Starting address for the stand-alone Forth interptreter
 #define   CPM22CBASE    0xD200            // CBASE value for CP/M 2.2
@@ -132,6 +136,22 @@ PetitFS licence:
 #define   COSSTRADDR    0x0000            // Starting address for the Collapse Os loader
 #define   AUTSTRADDR    0x0000            // Starting address for the AUTOBOOT.BIN file
 
+struct OsBootInfo
+{
+  char OsName[16];
+  char BootFile[16];
+  word BootAddr;
+};
+
+const OsBootInfo DefaultOsInfo[] PROGMEM = {
+  { "CP/M 2.2", CPMFN, CPMSTRADDR },
+  { "QP/M 2.71", QPMFN, QPMSTRADDR },
+  { "CP/M 3.0", CPM3FN, CPM3STRADDR },
+  { "UCSD Pascal", UCSDFN, UCSDSTRADDR },
+  { "Collapse Os", COSFN, COSSTRADDR }
+};
+const byte MaxDefaultOsInfo = sizeof(DefaultOsInfo)/sizeof(OsBootInfo);
+
 // ------------------------------------------------------------------------------
 //
 // Atmega clock speed check
@@ -139,11 +159,11 @@ PetitFS licence:
 // ------------------------------------------------------------------------------
 
 #if F_CPU == 20000000
-  #define CLOCK_LOW   "5"
-  #define CLOCK_HIGH  "10"
+  #define CLOCK_LOW   5
+  #define CLOCK_HIGH  10
 #else
-  #define CLOCK_LOW   "4"
-  #define CLOCK_HIGH  "8"
+  #define CLOCK_LOW   4
+  #define CLOCK_HIGH  8
 #endif
 
 // ------------------------------------------------------------------------------
@@ -151,8 +171,6 @@ PetitFS licence:
 //  Libraries
 //
 // ------------------------------------------------------------------------------
-
-#include <avr/pgmspace.h>                 // Needed for PROGMEM
 #include "Wire.h"                         // Needed for I2C bus
 #include <EEPROM.h>                       // Needed for internal EEPROM R/W
 #include "PetitFS.h"                      // Light handler for FAT16 and FAT32 filesystems on SD
@@ -177,7 +195,7 @@ const byte    clockModeAddr = 13;         // Internal EEPROM address for the Z80
                                           //  (1 = low speed, 0 = high speed)
 const byte    diskSetAddr  = 14;          // Internal EEPROM address for the current Disk Set [0..9]
 const byte    maxDiskNum   = 99;          // Max number of virtual disks
-const byte    maxDiskSet   = 5;           // Number of configured Disk Sets
+const byte    maxDiskSetNum = 10;         // Restrict disk set numbers to 0-9
 
 // Z80 programs images into flash and related constants
 const word  boot_A_StrAddr = 0xfd10;      // Payload A image starting address (flash)
@@ -223,7 +241,7 @@ const byte  boot_A_[] PROGMEM = {         // Payload A image (S200718 iLoad)
   0x00, 0xC9, 0xDB, 0x01, 0xFE, 0xFF, 0xCA, 0x72, 0xFF, 0xC9
   };
 
-const byte * const flahBootTable[1] PROGMEM = {boot_A_}; // Payload pointers table (flash)
+const byte * const flashBootTable[1] PROGMEM = {boot_A_}; // Payload pointers table (flash)
 
 // ------------------------------------------------------------------------------
 //
@@ -249,6 +267,7 @@ byte          iCount;                     // Temporary variable (counter)
 byte          clockMode;                  // Z80 clock HI/LO speed selector (0 = 8/10MHz, 1 = 4/5MHz)
 byte          LastRxIsEmpty;              // "Last Rx char was empty" flag. Is set when a serial Rx operation was done
                                           // when the Rx buffer was empty
+OsBootInfo    BootInfo;
 
 // DS3231 RTC variables
 byte          foundRTC;                   // Set to 1 if RTC is found, 0 otherwise
@@ -273,12 +292,14 @@ byte          numReadBytes;               // Number of read bytes after a readSD
 // Disk emulation on SD
 char          diskName[11]    = Z80DISK;  // String used for virtual disk file name
 char          OsName[11]      = DS_OSNAME;// String used for file holding the OS name
+char          OsNameTx[11]    = TX_OSNAME;// String used for file holding the OS boot details in text Name, Boot File, Boot Address(Hex)
 word          trackSel;                   // Store the current track number [0..511]
 byte          sectSel;                    // Store the current sector number [0..31]
 byte          diskErr         = 19;       // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
-                                          //  error code
+                                          // error code
 byte          numWriBytes;                // Number of written bytes after a writeSD() call
 byte          diskSet;                    // Current "Disk Set"
+byte          maxDiskSet      = 5;        // Number of configured Disk Sets (default to number of built in disk sets)
 
 // ------------------------------------------------------------------------------
 
@@ -362,14 +383,6 @@ void setup()
   }
   clockMode = EEPROM.read(clockModeAddr);         // Read the previous stored value
 
-  // Read the stored Disk Set. If not valid set it to 0
-  diskSet = EEPROM.read(diskSetAddr);
-  if (diskSet >= maxDiskSet) 
-  {
-    EEPROM.update(diskSetAddr, 0);
-    diskSet =0;
-  }
-
   // Initialize the EXP_PORT (I2C) and search for "known" optional modules
   Wire.begin();                                   // Wake up I2C bus
   Wire.beginTransmission(GPIOEXP_ADDR);
@@ -377,16 +390,13 @@ void setup()
   
   // Print some system information
   Serial.begin(115200);
-  Serial.println(F("\r\n\nZ80-MBC2 - A040618\r\nIOS - I/O Subsystem - RMH - BIG BUFFER\r\n"));
+  Serial.println(F("\r\n\nZ80-MBC2 - " HW_VERSION "\r\nIOS - I/O Subsystem - " SW_VERSION "\r\n"));
 
   // Print if the input serial buffer is 128 bytes wide (this is needed for xmodem protocol support)
   if (SERIAL_RX_BUFFER_SIZE >= 128) Serial.println(F("IOS: Found extended serial Rx buffer"));
 
   // Print the Z80 clock speed mode
-  Serial.print(F("IOS: Z80 clock set at "));
-  if (clockMode) Serial.print(CLOCK_LOW);
-  else Serial.print(CLOCK_HIGH);
-  Serial.println(F("MHz"));
+  Serial.printf(F("IOS: Z80 clock set at %dMHz\n\r"), clockMode ? CLOCK_LOW : CLOCK_HIGH);
 
   // Print RTC and GPIO informations if found
   foundRTC = autoSetRTC();                        // Check if RTC is present and initialize it as needed
@@ -406,105 +416,93 @@ void setup()
   // Boot selection and system parameters menu if requested
   mountSD(&filesysSD); mountSD(&filesysSD);       // Try to muont the SD volume
   bootMode = EEPROM.read(bootModeAddr);           // Read the previous stored boot mode
+
+  // Find the maximum number of disk sets
+  maxDiskSet = FindLastDiskSet();
+
+  // Read the stored Disk Set. If not valid set it to 0
+  diskSet = EEPROM.read(diskSetAddr);
+  if (diskSet >= maxDiskSet) 
+  {
+    EEPROM.update(diskSetAddr, 0);
+    diskSet =0;
+  }
+
   if ((bootSelection == 1 ) || (bootMode > maxBootMode))
   // Enter in the boot selection menu if USER key was pressed at startup 
   //   or an invalid bootMode code was read from internal EEPROM
   {
-    while (Serial.available() > 0)                // Flush input serial Rx buffer
-    {
-      Serial.read();
-    }
-    Serial.println();
-    Serial.println(F("IOS: Select boot mode or system parameters:"));
-    Serial.println();
-    if (bootMode <= maxBootMode)
-    // Previous valid boot mode read, so enable '0' selection
-    {
-      minBootChar = '0';
-      Serial.print(F(" 0: No change ("));
-      Serial.print(bootMode + 1);
-      Serial.println(F(")"));
-    }
-    Serial.println(F(" 1: Basic"));   
-    Serial.println(F(" 2: Forth"));
-    Serial.print(F(" 3: Load OS from "));
-    printOsName(diskSet);
-    Serial.println(F("\r\n 4: Autoboot"));
-    Serial.println(F(" 5: iLoad"));
-    Serial.print(F(" 6: Change Z80 clock speed (->"));
-    if (clockMode) Serial.print(CLOCK_HIGH);
-    else Serial.print(CLOCK_LOW);
-    Serial.println(F("MHz)"));
-    Serial.print(F(" 7: Toggle CP/M Autoexec (->"));
-    if (!autoexecFlag) Serial.print(F("ON"));
-    else Serial.print(F("OFF"));
-    Serial.println(F(")"));
-    Serial.print(F(" 8: Change "));
-    printOsName(diskSet);
-    Serial.println();
-
-    // If RTC module is present add a menu choice
-    if (foundRTC)
-    {
-      Serial.println(F(" 9: Change RTC time/date"));
-      maxSelChar = '9';
-    }
-
-    // Ask a choice
-    Serial.println();
-    timeStamp = millis();
-    Serial.print(F("Enter your choice >"));
     do
     {
-      blinkIOSled(&timeStamp);
-      inChar = Serial.read();
-    }               
-    while ((inChar < minBootChar) || (inChar > maxSelChar));
-    Serial.print(inChar);
-    Serial.println(F("  Ok"));
-
-    // Make the selected action for the system paramters choice
-    switch (inChar)
-    {
-      case '6':                                   // Change the clock speed of the Z80 CPU
-        clockMode = !clockMode;                   // Toggle Z80 clock speed mode (High/Low)
-        EEPROM.update(clockModeAddr, clockMode);  // Save it to the internal EEPROM
-      break;
-
-      case '7':                                   // Toggle CP/M AUTOEXEC execution on cold boot
-        autoexecFlag = !autoexecFlag;             // Toggle AUTOEXEC executiont status
-        EEPROM.update(autoexecFlagAddr, autoexecFlag); // Save it to the internal EEPROM
-      break;
-
-      case '8':                                   // Change current Disk Set
-        Serial.println(F("\r\nPress CR to accept, ESC to exit or any other key to change"));
-        iCount = diskSet;
-        do
-        {
-          // Print the OS name of the next Disk Set
-          iCount = (iCount + 1) % maxDiskSet;
-          Serial.print(F("\r ->"));
-          printOsName(iCount);
-          Serial.print(F("                 \r"));
-          while (Serial.available() > 0) Serial.read();   // Flush serial Rx buffer
-          while(Serial.available() < 1) blinkIOSled(&timeStamp);  // Wait a key
-          inChar = Serial.read();
-        }
-        while ((inChar != 13) && (inChar != 27)); // Continue until a CR or ESC is pressed
-        Serial.println();
-        Serial.println();
-        if (inChar == 13)                         // Set and store the new Disk Set if required
-        {
-           diskSet = iCount;
-           EEPROM.update(diskSetAddr, iCount);
-        }
-      break;
-
-      case '9':                                   // Change RTC Date/Time
-        ChangeRTC();                              // Change RTC Date/Time if requested
-      break;
-    };
-    
+      FlushRxBuffer();
+      Serial.println();
+      Serial.println(F("IOS: Select boot mode or system parameters:"));
+      Serial.println();
+      if (bootMode <= maxBootMode)
+      // Previous valid boot mode read, so enable '0' selection
+      {
+        minBootChar = '0';
+        Serial.printf(F(" 0: No change (%d)\r\n"), bootMode + 1);
+      }
+      Serial.println(F(" 1: Basic"));   
+      Serial.println(F(" 2: Forth"));
+      Serial.print(F(" 3: Load OS from "));
+      printOsName(diskSet);
+      Serial.println(F("\r\n 4: Autoboot"));
+      Serial.println(F(" 5: iLoad"));
+      Serial.printf(F(" 6: Change Z80 clock speed (->%dMHz)\r\n"), clockMode ? CLOCK_LOW : CLOCK_HIGH);
+      Serial.print(F(" 7: Toggle CP/M Autoexec (->"));
+      if (autoexecFlag) Serial.print(F("ON"));
+      else Serial.print(F("OFF"));
+      Serial.println(F(")"));
+      Serial.print(F(" 8: Change "));
+      printOsName(diskSet);
+      Serial.println();
+  
+      // If RTC module is present add a menu choice
+      if (foundRTC)
+      {
+        Serial.println(F(" 9: Change RTC time/date"));
+        maxSelChar = '9';
+      }
+  
+      // Ask a choice
+      Serial.println();
+      timeStamp = millis();
+      Serial.print(F("Enter your choice >"));
+      do
+      {
+        blinkIOSled(&timeStamp);
+        inChar = Serial.read();
+      }               
+      while ((inChar < minBootChar) || (inChar > maxSelChar));
+      Serial.print(inChar);
+      Serial.println(F("  Ok"));
+  
+      // Make the selected action for the system paramters choice
+      switch (inChar)
+      {
+        case '6':                                   // Change the clock speed of the Z80 CPU
+          clockMode = !clockMode;                   // Toggle Z80 clock speed mode (High/Low)
+          EEPROM.update(clockModeAddr, clockMode);  // Save it to the internal EEPROM
+        break;
+  
+        case '7':                                   // Toggle CP/M AUTOEXEC execution on cold boot
+          autoexecFlag = !autoexecFlag;             // Toggle AUTOEXEC executiont status
+          EEPROM.update(autoexecFlagAddr, autoexecFlag); // Save it to the internal EEPROM
+        break;
+  
+        case '8':                                   // Change current Disk Set
+          diskSet = ChangeDiskSet(diskSet);
+          EEPROM.update(diskSetAddr, diskSet);
+        break;
+  
+        case '9':                                   // Change RTC Date/Time
+          ChangeRTC();                              // Change RTC Date/Time if requested
+        break;
+      }
+    } while (inChar > '5');
+        
     // Save selectd boot program if changed
     bootMode = inChar - '1';                      // Calculate bootMode from inChar
     if (bootMode <= maxBootMode) EEPROM.update(bootModeAddr, bootMode); // Save to the internal EEPROM if required
@@ -538,33 +536,9 @@ void setup()
     break;
 
     case 2:                                       // Load an OS from current Disk Set on SD
-      switch (diskSet)
-      {
-      case 0:                                     // CP/M 2.2
-        fileNameSD = CPMFN;
-        BootStrAddr = CPMSTRADDR;
-      break;
-
-      case 1:                                     // QP/M 2.71
-        fileNameSD = QPMFN;
-        BootStrAddr = QPMSTRADDR;
-      break;
-
-      case 2:                                     // CP/M 3.0
-        fileNameSD = CPM3FN;
-        BootStrAddr = CPM3STRADDR;
-      break;
-
-      case 3:                                     // UCSD Pascal
-        fileNameSD = UCSDFN;
-        BootStrAddr = UCSDSTRADDR;
-      break;
-
-      case 4:                                     // Collapse Os
-        fileNameSD = COSFN;
-        BootStrAddr = COSSTRADDR;
-      break;
-      }
+      BootInfo = GetDiskSetBootInfo(diskSet);
+      fileNameSD = BootInfo.BootFile;
+      BootStrAddr = BootInfo.BootAddr;
     break;
     
     case 3:                                       // Load AUTOBOOT.BIN from SD (load an user executable binary file)
@@ -573,7 +547,7 @@ void setup()
     break;
     
     case 4:                                       // Load iLoad from flash
-      BootImage = (byte *) pgm_read_word (&flahBootTable[0]); 
+      BootImage = (byte *) pgm_read_word (&flashBootTable[0]); 
       BootImageSize = sizeof(boot_A_);
       BootStrAddr = boot_A_StrAddr;
     break;
@@ -592,8 +566,7 @@ void setup()
     // DEBUG ----------------------------------
     if (debug)
     {
-      Serial.print(F("DEBUG: Injected JP 0x"));
-      Serial.println(BootStrAddr, HEX);
+      Serial.printf(F("DEBUG: Injected JP 0x%0X\n\r"), BootStrAddr);
     }
     // DEBUG END ------------------------------
     //
@@ -605,10 +578,8 @@ void setup()
   // DEBUG ----------------------------------
   if (debug)
   {
-    Serial.print(F("DEBUG: Flash BootImageSize = "));
-    Serial.println(BootImageSize);
-    Serial.print(F("DEBUG: BootStrAddr = "));
-    Serial.println(BootStrAddr, HEX);    
+    Serial.printf(F("DEBUG: Flash BootImageSize = %d\n\r"), BootImageSize);
+    Serial.printf(F("DEBUG: BootStrAddr = 0x%0X\n\r"), BootStrAddr);
   }
   // DEBUG END ------------------------------
   //
@@ -652,9 +623,7 @@ void setup()
     while (errCodeSD);
 
     // Read the selected file from SD and load it into RAM until an EOF is reached
-    Serial.print(F("IOS: Loading boot program ("));
-    Serial.print(fileNameSD);
-    Serial.print(F(")..."));
+    Serial.printf(F("IOS: Loading boot program (%s@0x%04x)..."), fileNameSD, BootStrAddr);
     do
     // If an error occurs repeat until error disappears (or the user forces a reset)
     {
@@ -704,16 +673,12 @@ void setup()
   TCCR2 &= ~(1 << WGM20);
   TCCR2 |= (1 <<  COM20);                         // Set "toggle OC2 on compare match"
   TCCR2 &= ~(1 << COM21);
-  OCR2 = clockMode;                               // Set the compare value to toggle OC2 (0 = low or 1 = high)
+  OCR2 = clockMode;                               // Set the compare value to toggle OC2 (0 = high or 1 = low)
   pinMode(CLK, OUTPUT);                           // Set OC2 as output and start to output the clock
   Serial.println(F("IOS: Z80 is running from now"));
   Serial.println();
 
-  // Flush serial Rx buffer
-  while (Serial.available() > 0) 
-  {
-    Serial.read();
-  }
+  FlushRxBuffer();
 
   // Leave the Z80 CPU running
   delay(1);                                       // Just to be sure...
@@ -1545,18 +1510,6 @@ void loop()
 
 // ------------------------------------------------------------------------------
 
-
-
-void printBinaryByte(byte value)
-{
-  for (byte mask = 0x80; mask; mask >>= 1)
-  {
-    Serial.print((mask & value) ? '1' : '0');
-  }
-}
-
-// ------------------------------------------------------------------------------
-
 void serialEvent()
 // Set INT_ to ACTIVE if there are received chars from serial to read and if the interrupt generation is enabled
 {
@@ -1725,27 +1678,11 @@ void printDateTime(byte readSourceFlag)
 //    If readSourceFlag = 0 the RTC read is not done
 //    If readSourceFlag = 1 the RTC read is done (global variables are updated)
 {
-  if (readSourceFlag) readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
-  print2digit(day);
-  Serial.print(F("/"));
-  print2digit(month);
-  Serial.print(F("/"));
-  print2digit(year);
-  Serial.print(F(" "));
-  print2digit(hours);
-  Serial.print(F(":"));
-  print2digit(minutes);
-  Serial.print(F(":"));
-  print2digit(seconds);
-}
-
-// ------------------------------------------------------------------------------
-
-void print2digit(byte data)
-// Print a byte [0..99] using 2 digit with leading zeros if needed
-{
-  if (data < 10) Serial.print(F("0"));
-  Serial.print(data);
+  if (readSourceFlag)
+  {
+    readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
+  }
+  Serial.printf(F("%2d/%2d/%2d %2d:%2d:%2d"), day, month, year, hours, minutes, seconds);
 }
 
 // ------------------------------------------------------------------------------
@@ -1764,52 +1701,42 @@ byte isLeapYear(byte yearXX)
 void ChangeRTC()
 // Change manually the RTC Date/Time from keyboard
 {
-  byte    leapYear;   //  Set to 1 if the selected year is bissextile, 0 otherwise [0..1]
-
   // Read RTC
   readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
 
   // Change RTC date/time from keyboard
-  tempByte = 0;
+  byte partIndex = 0;
+  char inChar = 0;
   Serial.println(F("\nIOS: RTC manual setting:"));
   Serial.println(F("\nPress T/U to increment +10/+1 or CR to accept"));
   do
   {
     do
     {
-      Serial.print(F(" "));
-      switch (tempByte)
+      switch (partIndex)
       {
         case 0:
-          Serial.print(F("Year -> "));
-          print2digit(year);
+          Serial.printf(F(" Year -> %02d"), year);
         break;
         
         case 1:
-          Serial.print(F("Month -> "));
-          print2digit(month);
+          Serial.printf(F(" Month -> %02d"), month);
         break;
 
         case 2:
-          Serial.print(F("             "));
-          Serial.write(13);
-          Serial.print(F(" Day -> "));
-          print2digit(day);
+          Serial.printf(F(" Day -> %02d  "), day);
         break;
 
         case 3:
-          Serial.print(F("Hours -> "));
-          print2digit(hours);
+          Serial.printf(F(" Hours -> %02d"), hours);
         break;
 
         case 4:
-          Serial.print(F("Minutes -> "));
-          print2digit(minutes);
+          Serial.printf(F(" Minutes -> %02d"), minutes);
         break;
 
         case 5:
-          Serial.print(F("Seconds -> "));
-          print2digit(seconds);
+          Serial.printf(F(" Seconds -> %02d"), seconds);
         break;
       }
 
@@ -1817,13 +1744,14 @@ void ChangeRTC()
       do
       {
         blinkIOSled(&timeStamp);
-        inChar = Serial.read();
+        inChar = toupper(Serial.read());
       }
-      while ((inChar != 'u') && (inChar != 'U') && (inChar != 't') && (inChar != 'T') && (inChar != 13));
+      while ((inChar != 'U') && (inChar != 'T') && (inChar != 13));
       
-      if ((inChar == 'u') || (inChar == 'U'))
-      // Change units
-        switch (tempByte)
+      if ((inChar == 'U'))
+      {
+        // Change units
+        switch (partIndex)
         {
           case 0:
             year++;
@@ -1862,9 +1790,11 @@ void ChangeRTC()
             if (seconds > 59) seconds = 0;
           break;
         }
-      if ((inChar == 't') || (inChar == 'T'))
-      // Change tens
-        switch (tempByte)
+      }
+      if ((inChar == 'T'))
+      {
+        // Change tens
+        switch (partIndex)
         {
           case 0:
             year = year + 10;
@@ -1897,12 +1827,13 @@ void ChangeRTC()
             if (seconds > 59) seconds = seconds - (seconds / 10 ) * 10;
           break;
         }
+      }
       Serial.write(13);
     }
     while (inChar != 13);
-    tempByte++;
+    partIndex++;
   }
-  while (tempByte < 6);  
+  while (partIndex < 6);  
 
   // Write new date/time into the RTC
   writeRTC(seconds, minutes, hours, day, month, year);
@@ -2201,12 +2132,19 @@ void printErrSD(byte opType, byte errCode, const char* fileName)
   }
 }
 
-// ------------------------------------------------------------------------------
+void FlushRxBuffer()
+{
+  while (Serial.available() > 0)
+  {
+    Serial.read();
+  }
+}
 
 void waitKey()
 // Wait a key to continue
 {
-  while (Serial.available() > 0) Serial.read();   // Flush serial Rx buffer
+  FlushRxBuffer();
+  
   Serial.println(F("IOS: Check SD and press a key to repeat\r\n"));
   while(Serial.available() < 1);
 }
@@ -2217,16 +2155,122 @@ void printOsName(byte currentDiskSet)
 // Print the current Disk Set number and the OS name, if it is defined.
 // The OS name is inside the file defined in DS_OSNAME
 {
-  Serial.print(F("Disk Set "));
-  Serial.print(currentDiskSet);
-  OsName[2] = currentDiskSet + 48;    // Set the Disk Set
-  openSD(OsName);                     // Open file with the OS name
-  readSD(bufferSD, &numReadBytes);    // Read the OS name
-  if (numReadBytes > 0)
-  // Print the OS name
+  OsBootInfo bootInfo = GetDiskSetBootInfo(currentDiskSet);
+  Serial.printf(F("Disk Set %1X (%s)"), currentDiskSet, bootInfo.OsName);
+}
+
+byte ChangeDiskSet(byte curDiskSet)
+{
+  byte newSet = maxDiskSet + 1;
+  Serial.println();
+  Serial.print(F("Current selection: "));
+  printOsName(curDiskSet);
+  Serial.println();
+  Serial.println();
+  do
   {
-    Serial.print(F(" ("));
-    Serial.print((const char *)bufferSD);
-    Serial.print(F(")"));
+    for (int setNum = 0; setNum != maxDiskSet; ++setNum)
+    {
+      OsBootInfo tmpInfo = GetDiskSetBootInfo(setNum);
+      Serial.printf(F(" %1X: Disk Set %1X (%s)\n\r"), setNum, setNum, tmpInfo.OsName);
+    }
+    Serial.print(F("Enter your choice or ESC to return>"));
+    FlushRxBuffer();
+    while(Serial.available() < 1)
+    {
+      blinkIOSled(&timeStamp);  // Wait a key
+    }
+    char inChar = Serial.read();
+    if (isDigit(inChar))
+    {
+      newSet = inChar - '0';
+    }
+    else if (inChar == 27)
+    {
+      newSet = curDiskSet;
+    }
+  } while (newSet >= maxDiskSet);
+  Serial.println(F("   Ok"));
+  return newSet;
+}
+
+byte FindLastDiskSet()
+{
+  for (int setNum = 0; setNum != maxDiskSetNum; ++setNum)
+  {
+    OsBootInfo bootInfo = GetDiskSetBootInfo(setNum);
+    if (bootInfo.OsName[0] != '\0')
+    {
+        Serial.printf(F("IOS: Found Disk Set %1X (%s)\n\r"), setNum, bootInfo.OsName);
+    }
+    else
+    {
+      return setNum;
+    }
   }
+
+  return maxDiskSetNum;
+}
+
+OsBootInfo GetDiskSetBootInfo(byte setNum)
+{
+  if (setNum < MaxDefaultOsInfo)
+  {
+    OsBootInfo tmpInfo;
+    memcpy_P(&tmpInfo, &(DefaultOsInfo[setNum]), sizeof(OsBootInfo));
+    return tmpInfo;
+  }
+
+  OsBootInfo tmpInfo = {0, 0, 0};
+  const char *binName = MkOsDiskSet(setNum);
+  byte result = openSD(binName);
+  if (result == 0)
+  {
+    readSD(bufferSD, &numReadBytes);
+    return *((OsBootInfo *)bufferSD);
+  }
+  else
+  {
+    const char *txtName = MkTxtDiskSet(setNum);
+    result = openSD(txtName);
+    if (result == 0)
+    {
+      readSD(bufferSD, &numReadBytes);
+      bufferSD[numReadBytes] = '\0';
+      const char* token = strtok((char *)bufferSD, "\n\r");
+      if (token != NULL)
+      {
+        strncpy(tmpInfo.OsName, token, sizeof(tmpInfo.OsName));
+        tmpInfo.OsName[sizeof(tmpInfo.OsName) - 1] = '\0';
+      }
+      token = strtok(NULL, "\n\r");
+      if (token != NULL)
+      {
+        strncpy(tmpInfo.BootFile, token, sizeof(tmpInfo.BootFile));
+        tmpInfo.BootFile[sizeof(tmpInfo.BootFile) - 1] = '\0';
+      }
+      token = strtok(NULL, "\n\r");
+      if (token != NULL)
+      {
+        tmpInfo.BootAddr = strtol(token, NULL, 0);
+      }
+
+      // The initial intent was to save tmpInfo into the .DAT file to save 
+      // parsing the text file each time. Unfortunately PetitFS can't create
+      // or expand files so this is not possible.
+    }
+  }
+  return tmpInfo;
+}
+
+const char *MkOsDiskSet(byte setNum)
+{
+    OsName[2] = setNum + '0';
+    return OsName;
+}
+
+const char *MkTxtDiskSet(byte setNum)
+{
+    OsNameTx[2] = setNum + '0';
+    return OsNameTx;
 }
