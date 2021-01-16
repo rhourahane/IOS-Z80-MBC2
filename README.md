@@ -4,6 +4,8 @@ This is a copy of the Arduino source for the Z80-MBC2 computer (https://hackaday
 I really like the ability to boot multiple OSes from one SD card.
 
 This version has been updated with the following modifications:
+* Ability to use a ATmega1284 instead of the standard ATmega32, which is what I'm doing all my development on now.
+* I have been using LTO (Link Time Optimization) with the build and it seams to work and reduce the code size quite a bit.
 * Put all strings into PROGMEM to save RAM
 * Increased the segment size used to read/write sectors to 128 bytes
 * Improved boot menu functionality and made adding new disk sets nolonger required an IOS change, Details of disk set now read from .TXT file.
