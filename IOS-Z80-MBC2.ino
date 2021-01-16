@@ -20,31 +20,14 @@ Notes:
 
 
 ---------------------------------------------------------------------------------
-
-Credits:
-
-SD library from: https://github.com/greiman/PetitFS (based on 
-PetitFS: http://elm-chan.org/fsw/ff/00index_p.html)
-
-PetitFS licence:
-/-----------------------------------------------------------------------------/
-/  Petit FatFs - FAT file system module  R0.03                  (C)ChaN, 2014
-/-----------------------------------------------------------------------------/
-/ Petit FatFs module is a generic FAT file system module for small embedded
-/ systems. This is a free software that opened for education, research and
-/ commercial developments under license policy of following trems.
-/
-/  Copyright (C) 2014, ChaN, all right reserved.
-/
-/ * The Petit FatFs module is a free software and there is NO WARRANTY.
-/ * No restriction on use. You can use, modify and redistribute it for
-/   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
-/ * Redistributions of source code must retain the above copyright notice.
-/
-/---------------------------------------------------------------------------- */
+*/
+#include "Wire.h"           // Needed for I2C bus
+#include <EEPROM.h>         // Needed for internal EEPROM R/W
+#include <SPI.h>            // Needed for SPI used to access SD Card
+#include <SD.h>             // Needed for SD file access
 
 #define HW_VERSION "A040618"
-#define SW_VERSION "RMH-OS-MENU"
+#define SW_VERSION "RMH-OS-SD"
 
 // ------------------------------------------------------------------------------
 //
@@ -152,6 +135,30 @@ const OsBootInfo DefaultOsInfo[] PROGMEM = {
 };
 const byte MaxDefaultOsInfo = sizeof(DefaultOsInfo)/sizeof(OsBootInfo);
 
+enum DiskErrCode : byte
+{
+  NO_ERROR = 0,
+  DISK_ERR,
+  NOT_READY,
+  NO_FILE,
+  NOT_OPENED,
+  NOT_ENABLED,
+  NO_FILESYSTEM,
+  BAD_DISK_NO = 16,
+  BAD_TRACK_NO,
+  BAD_SECTOR_NO,
+  UNEXPECTED_EOF
+};
+
+enum DiskOpCode : byte
+{
+  MOUNT,
+  OPEN,
+  READ,
+  WRITE,
+  SEEK,
+};
+
 // ------------------------------------------------------------------------------
 //
 // Atmega clock speed check
@@ -165,15 +172,6 @@ const byte MaxDefaultOsInfo = sizeof(DefaultOsInfo)/sizeof(OsBootInfo);
   #define CLOCK_LOW   4
   #define CLOCK_HIGH  8
 #endif
-
-// ------------------------------------------------------------------------------
-//
-//  Libraries
-//
-// ------------------------------------------------------------------------------
-#include "Wire.h"                         // Needed for I2C bus
-#include <EEPROM.h>                       // Needed for internal EEPROM R/W
-#include "PetitFS.h"                      // Light handler for FAT16 and FAT32 filesystems on SD
 
 // ------------------------------------------------------------------------------
 //
@@ -280,7 +278,6 @@ byte          tempC;                      // Temperature (Celsius) encoded in tw
 #define SECTOR_COUNT  32
 #define TRACK_COUNT   512
 
-FATFS         filesysSD;                  // Filesystem object (PetitFS library)
 byte          bufferSD[SEGMENT_SIZE];     // I/O buffer for SD disk operations (store a "segment" of a SD sector).
                                           // Each SD sector (512 bytes) is divided into N segments (SEGMENT_SIZE bytes each)
 const char *  fileNameSD;                 // Pointer to the string with the currently used file name
@@ -324,6 +321,9 @@ void setup()
   // ----------------------------------------
   // INITIALIZATION
   // ----------------------------------------
+  // Print some system information
+  Serial.begin(115200);
+  Serial.println(F("\r\n\nZ80-MBC2 - " HW_VERSION "\r\nIOS - I/O Subsystem - " SW_VERSION "\r\n"));
 
   // Initialize RESET_ and WAIT_RES_
   pinMode(RESET_, OUTPUT);                        // Configure RESET_ and set it ACTIVE
@@ -388,10 +388,6 @@ void setup()
   Wire.beginTransmission(GPIOEXP_ADDR);
   if (Wire.endTransmission() == 0) moduleGPIO = 1;// Set to 1 if GPIO Module is found
   
-  // Print some system information
-  Serial.begin(115200);
-  Serial.println(F("\r\n\nZ80-MBC2 - " HW_VERSION "\r\nIOS - I/O Subsystem - " SW_VERSION "\r\n"));
-
   // Print if the input serial buffer is 128 bytes wide (this is needed for xmodem protocol support)
   if (SERIAL_RX_BUFFER_SIZE >= 128) Serial.println(F("IOS: Found extended serial Rx buffer"));
 
@@ -414,7 +410,16 @@ void setup()
   // ----------------------------------------
 
   // Boot selection and system parameters menu if requested
-  mountSD(&filesysSD); mountSD(&filesysSD);       // Try to muont the SD volume
+  auto mountRes = mountSD();
+  if (mountRes != NO_ERROR)
+  {
+    mountRes = mountSD();
+    if (mountRes != NO_ERROR)
+    {
+      printErrSD(MOUNT, mountRes, NULL);
+    }
+  }
+  
   bootMode = EEPROM.read(bootModeAddr);           // Read the previous stored boot mode
 
   // Find the maximum number of disk sets
@@ -587,18 +592,17 @@ void setup()
   // Load from SD
   {
     // Mount a volume on SD
-    if (mountSD(&filesysSD))
+    if (mountSD())
     // Error mounting. Try again
     {
-      errCodeSD = mountSD(&filesysSD);
+      errCodeSD = mountSD();
       if (errCodeSD)
       // Error again. Repeat until error disappears (or the user forces a reset)
       do
       {
-        printErrSD(0, errCodeSD, NULL);
+        printErrSD(MOUNT, errCodeSD, NULL);
         waitKey();                                // Wait a key to repeat
-        mountSD(&filesysSD);                      // New double try
-        errCodeSD = mountSD(&filesysSD);
+        errCodeSD = mountSD();
       }
       while (errCodeSD);
     }
@@ -609,14 +613,13 @@ void setup()
     // Error opening the required file. Repeat until error disappears (or the user forces a reset)
     do
     {
-      printErrSD(1, errCodeSD, fileNameSD);
+      printErrSD(OPEN, errCodeSD, fileNameSD);
       waitKey();                                  // Wait a key to repeat
       errCodeSD = openSD(fileNameSD);
       if (errCodeSD != 3)
       // Try to do a two mount operations followed by an open
       {
-        mountSD(&filesysSD);
-        mountSD(&filesysSD);
+        mountSD();
         errCodeSD = openSD(fileNameSD);
       }
     }
@@ -640,7 +643,7 @@ void setup()
       while ((numReadBytes == SEGMENT_SIZE) && (!errCodeSD));   // If numReadBytes < SEGMENT_SIZE -> EOF reached
       if (errCodeSD)
       {
-        printErrSD(2, errCodeSD, fileNameSD);
+        printErrSD(READ, errCodeSD, fileNameSD);
         waitKey();                                // Wait a key to repeat
         seekSD(0);                                // Reset the sector pointer
       }
@@ -666,14 +669,24 @@ void setup()
   digitalWrite(RESET_, LOW);                      // Activate the RESET_ signal
 
   // Initialize CLK @ 4/8MHz (@ Fosc = 16MHz). Z80 clock_freq = (Atmega_clock) / ((OCR2 + 1) * 2)
-  ASSR &= ~(1 << AS2);                            // Set Timer2 clock from system clock
-  TCCR2 |= (1 << CS20);                           // Set Timer2 clock to "no prescaling"
+  ASSR &= ~(1 << AS2);                    // Set Timer2 clock from system clock
+#if defined(TCCR2)  
+  TCCR2 |= (1 << CS20);                   // Set Timer2 clock to "no prescaling"
   TCCR2 &= ~((1 << CS21) | (1 << CS22));
-  TCCR2 |= (1 << WGM21);                          // Set Timer2 CTC mode
+  TCCR2 |= (1 << WGM21);                  // Set Timer2 CTC mode
   TCCR2 &= ~(1 << WGM20);
-  TCCR2 |= (1 <<  COM20);                         // Set "toggle OC2 on compare match"
+  TCCR2 |= (1 <<  COM20);                 // Set "toggle OC2 on compare match"
   TCCR2 &= ~(1 << COM21);
-  OCR2 = clockMode;                               // Set the compare value to toggle OC2 (0 = high or 1 = low)
+  OCR2 = clockMode;                       // Set the compare value to toggle OC2 (0 = high or 1 = low)
+#else
+  TCCR2B |= (1 << CS20);                  // Set Timer2 clock to "no prescaling"
+  TCCR2B &= ~((1 << CS21) | (1 << CS22));
+  TCCR2A |= (1 << WGM21);                 // Set Timer2 CTC mode
+  TCCR2A &= ~(1 << WGM20);
+  TCCR2A |= (1 <<  COM2A0);               // Set "toggle OC2 on compare match"
+  TCCR2A &= ~(1 << COM2A1);
+  OCR2A = clockMode;                      // Set the compare value to toggle OC2 (0 = high or 1 = low)
+#endif
   pinMode(CLK, OUTPUT);                           // Set OC2 as output and start to output the clock
   Serial.println(F("IOS: Z80 is running from now"));
   Serial.println();
@@ -928,7 +941,7 @@ void loop()
             diskName[5] = ioData - ((ioData / 10) * 10) + 48;
             diskErr = openSD(diskName);           // Open the "disk file" corresponding to the given disk number
           }
-          else diskErr = 16;                      // Illegal disk number
+          else diskErr = BAD_DISK_NO;             // Illegal disk number
         break;
 
         case  0x0A:
@@ -968,15 +981,18 @@ void loop()
             if ((trackSel < TRACK_COUNT) && (sectSel < SECTOR_COUNT))
             // Sector and track numbers valid
             {
-              diskErr = 0;                      // No errors
+              diskErr = NO_ERROR;             // No errors
             }
             else
             // Sector or track invalid number
             {
-              if (sectSel < SECTOR_COUNT) diskErr = 17;     // Illegal track number
-              else diskErr = 18;                  // Illegal sector number
+              if (sectSel < SECTOR_COUNT)
+              {
+                diskErr = BAD_TRACK_NO;       // Illegal track number
+              }
+              else diskErr = BAD_SECTOR_NO;   // Illegal sector number
             }
-            ioOpcode = 0xFF;                      // All done. Set ioOpcode = "No operation"
+            ioOpcode = 0xFF;                  // All done. Set ioOpcode = "No operation"
           }
           ioByteCnt++;
         break;
@@ -1006,13 +1022,16 @@ void loop()
           if ((trackSel < TRACK_COUNT) && (sectSel < SECTOR_COUNT))
           // Sector and track numbers valid
           {
-            diskErr = 0;                        // No errors
+            diskErr = NO_ERROR;                 // No errors
           }
           else
           // Sector or track invalid number
           {
-            if (sectSel < SECTOR_COUNT) diskErr = 17;     // Illegal track number
-            else diskErr = 18;                  // Illegal sector number
+            if (sectSel < SECTOR_COUNT)
+            {
+              diskErr = BAD_TRACK_NO;           // Illegal track number
+            }
+            else diskErr = BAD_SECTOR_NO;       // Illegal sector number
           }
         break;
 
@@ -1070,9 +1089,9 @@ void loop()
             {
               diskErr = writeSD(bufferSD, &numWriBytes);
               if (numWriBytes < SEGMENT_SIZE)
-			  {
-				diskErr = 19; // Reached an unexpected EOF
-			  }
+      			  {
+      				  diskErr = UNEXPECTED_EOF; // Reached an unexpected EOF
+      			  }
               if (ioByteCnt >= (BLOCK_SIZE - 1))
               // Finalize write operation and check result (if no previous error occurred)
               {
@@ -1456,8 +1475,7 @@ void loop()
             // NOTE 2: For error codes explanation see ERRDISK opcode
             // NOTE 3: Only for this disk opcode, the resulting error is read as a data byte without using the 
             //         ERRDISK opcode
-
-            ioData = mountSD(&filesysSD);
+            ioData = mountSD();
           break;          
           }
           if ((ioOpcode != 0x84) && (ioOpcode != 0x86)) ioOpcode = 0xFF;  // All done for the single byte opcodes. 
@@ -1955,23 +1973,44 @@ void singlePulsesResetZ80()
 
 // ------------------------------------------------------------------------------
 
+File openSDFile;
 
-byte mountSD(FATFS* fatFs)
-// Mount a volume on SD: 
-// *  "fatFs" is a pointer to a FATFS object (PetitFS library)
+byte mountSD()
+// Mount a volume on SD:
 // The returned value is the resulting status (0 = ok, otherwise see printErrSD())
 {
-  return pf_mount(fatFs);
+  if (SD.begin(SS_))
+  {
+    return NO_ERROR;
+  }
+  Serial.println(F("Failed to mounted SD Card"));
+  return DISK_ERR;
 }
 
-// ------------------------------------------------------------------------------
 
 byte openSD(const char* fileName)
 // Open an existing file on SD:
 // *  "fileName" is the pointer to the string holding the file name (8.3 format)
 // The returned value is the resulting status (0 = ok, otherwise see printErrSD())
 {
-  return pf_open(fileName);
+  //
+  if ((openSDFile.name() != NULL) &&
+      (strcmp(openSDFile.name(), fileName) == 0))
+  {
+    return NO_ERROR;
+  }
+  openSDFile = SD.open(fileName, FILE_WRITE);
+  if (openSDFile)
+  {
+    if (openSDFile.seek(0))
+    {
+      return NO_ERROR;
+    }
+    Serial.printf(F("Failed to seek to start of %s\n\r"), fileName);
+    return NOT_OPENED;
+  }
+  Serial.printf(F("Failed to open %s\n\r"), fileName);
+  return NOT_OPENED;
 }
 
 // ------------------------------------------------------------------------------
@@ -1989,16 +2028,28 @@ byte readSD(void* buffSD, byte* numReadBytes)
 // NOTE2: Past current sector boundary, the next sector will be pointed. So to read a whole file it is sufficient 
 //        call readSD() consecutively until EOF is reached
 {
-  UINT  numBytes;
-  byte  errcode;
-  errcode = pf_read(buffSD, SEGMENT_SIZE, &numBytes);
-  *numReadBytes = (byte) numBytes;
-  return errcode;
+  if (openSDFile)
+  {
+    int numBytes;
+    numBytes = openSDFile.read(buffSD, SEGMENT_SIZE);
+    if (numBytes >= 0)
+    {
+      *numReadBytes = (byte)numBytes;
+      return NO_ERROR;
+    }
+    Serial.printf(F("Failed read from %s\n\r"), openSDFile.name());
+    return NOT_READY;
+  }
+  else
+  {
+    Serial.printf(F("File %s is not open\n\r"), openSDFile.name());
+    return NOT_OPENED;
+  }
 }
 
 // ------------------------------------------------------------------------------
 
-byte writeSD(void* buffSD, byte* numWrittenBytes)
+byte writeSD(byte* buffSD, byte* numWrittenBytes)
 // Write one "segment" (SEGMENT_SIZE bytes) starting from the current sector (512 bytes) of the opened file on SD:
 // *  "BuffSD" is the pointer to the segment buffer;
 // *  "numWrittenBytes" is the pointer to the variables that store the number of written bytes;
@@ -2013,18 +2064,31 @@ byte writeSD(void* buffSD, byte* numWrittenBytes)
 //
 // NOTE3: To finalize the current write operation a writeSD(NULL, &numWrittenBytes) must be called as last action
 {
-  UINT  numBytes;
-  byte  errcode;
-  if (buffSD != NULL)
+  if (openSDFile)
   {
-    errcode = pf_write(buffSD, SEGMENT_SIZE, &numBytes);
+    size_t numBytes;
+    byte  errcode;
+    if (buffSD != NULL)
+    {
+      numBytes = openSDFile.write((const char *)buffSD, SEGMENT_SIZE);
+      if (numBytes >= 0)
+      {
+        *numWrittenBytes = (byte) numBytes;
+        return NO_ERROR;
+      }
+      else
+      {
+        Serial.printf(F("Failed to write %d bytes to file %s\n\r"), numBytes, openSDFile.name());
+        return NOT_READY;
+      }
+    }
+    else
+    {
+      openSDFile.flush();
+      return NO_ERROR;
+    }
   }
-  else
-  {
-    errcode = pf_write(0, 0, &numBytes);
-  }
-  *numWrittenBytes = (byte) numBytes;
-  return errcode;
+  return NOT_OPENED;
 }
 
 // ------------------------------------------------------------------------------
@@ -2038,8 +2102,20 @@ byte seekSD(word sectNum)
 //       16383 = (512 * 32) - 1, where 512 is the number of emulated tracks, 32 is the number of emulated sectors
 //
 {
-  byte i;
-  return pf_lseek(((unsigned long) sectNum) << 9);
+  if (openSDFile)
+  {
+    uint32_t offset = ((uint32_t)sectNum) << 9;
+    if (openSDFile.seek(offset))
+    {
+      return NO_ERROR;
+    }
+    else
+    {
+      return NOT_READY;
+    }
+  }
+
+  return NOT_OPENED;
 }
 
 // ------------------------------------------------------------------------------
@@ -2103,22 +2179,23 @@ void printErrSD(byte opType, byte errCode, const char* fileName)
     switch (errCode)
     // See PetitFS implementation for the codes
     {
-      case 1: Serial.print(F("DISK_ERR")); break;
-      case 2: Serial.print(F("NOT_READY")); break;
-      case 3: Serial.print(F("NO_FILE")); break;
-      case 4: Serial.print(F("NOT_OPENED")); break;
-      case 5: Serial.print(F("NOT_ENABLED")); break;
-      case 6: Serial.print(F("NO_FILESYSTEM")); break;
+      case NO_ERROR: Serial.print(F("NO_ERROR")); break;
+      case DISK_ERR: Serial.print(F("DISK_ERR")); break;
+      case NOT_READY: Serial.print(F("NOT_READY")); break;
+      case NO_FILE: Serial.print(F("NO_FILE")); break;
+      case NOT_OPENED: Serial.print(F("NOT_OPENED")); break;
+      case NOT_ENABLED: Serial.print(F("NOT_ENABLED")); break;
+      case NO_FILESYSTEM: Serial.print(F("NO_FILESYSTEM")); break;
       default: Serial.print(F("UNKNOWN")); 
     }
     Serial.print(F(" on "));
     switch (opType)
     {
-      case 0: Serial.print(F("MOUNT")); break;
-      case 1: Serial.print(F("OPEN")); break;
-      case 2: Serial.print(F("READ")); break;
-      case 3: Serial.print(F("WRITE")); break;
-      case 4: Serial.print(F("SEEK")); break;
+      case MOUNT: Serial.print(F("MOUNT")); break;
+      case OPEN: Serial.print(F("OPEN")); break;
+      case READ: Serial.print(F("READ")); break;
+      case WRITE: Serial.print(F("WRITE")); break;
+      case SEEK: Serial.print(F("SEEK")); break;
       default: Serial.print(F("UNKNOWN"));
     }
     Serial.print(F(" operation"));
