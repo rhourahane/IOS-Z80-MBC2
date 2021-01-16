@@ -135,6 +135,30 @@ const OsBootInfo DefaultOsInfo[] PROGMEM = {
 };
 const byte MaxDefaultOsInfo = sizeof(DefaultOsInfo)/sizeof(OsBootInfo);
 
+enum DiskErrCode : byte
+{
+  NO_ERROR = 0,
+  DISK_ERR,
+  NOT_READY,
+  NO_FILE,
+  NOT_OPENED,
+  NOT_ENABLED,
+  NO_FILESYSTEM,
+  BAD_DISK_NO = 16,
+  BAD_TRACK_NO,
+  BAD_SECTOR_NO,
+  UNEXPECTED_EOF
+};
+
+enum DiskOpCode : byte
+{
+  MOUNT,
+  OPEN,
+  READ,
+  WRITE,
+  SEEK,
+};
+
 // ------------------------------------------------------------------------------
 //
 // Atmega clock speed check
@@ -297,6 +321,9 @@ void setup()
   // ----------------------------------------
   // INITIALIZATION
   // ----------------------------------------
+  // Print some system information
+  Serial.begin(115200);
+  Serial.println(F("\r\n\nZ80-MBC2 - " HW_VERSION "\r\nIOS - I/O Subsystem - " SW_VERSION "\r\n"));
 
   // Initialize RESET_ and WAIT_RES_
   pinMode(RESET_, OUTPUT);                        // Configure RESET_ and set it ACTIVE
@@ -361,10 +388,6 @@ void setup()
   Wire.beginTransmission(GPIOEXP_ADDR);
   if (Wire.endTransmission() == 0) moduleGPIO = 1;// Set to 1 if GPIO Module is found
   
-  // Print some system information
-  Serial.begin(115200);
-  Serial.println(F("\r\n\nZ80-MBC2 - " HW_VERSION "\r\nIOS - I/O Subsystem - " SW_VERSION "\r\n"));
-
   // Print if the input serial buffer is 128 bytes wide (this is needed for xmodem protocol support)
   if (SERIAL_RX_BUFFER_SIZE >= 128) Serial.println(F("IOS: Found extended serial Rx buffer"));
 
@@ -387,11 +410,13 @@ void setup()
   // ----------------------------------------
 
   // Boot selection and system parameters menu if requested
-  if (mountSD() != 0)
+  auto mountRes = mountSD();
+  if (mountRes != NO_ERROR)
   {
-    if (mountSD() != 0)
+    mountRes = mountSD();
+    if (mountRes != NO_ERROR)
     {
-      Serial.println(F("Failed to open SD Card"));
+      printErrSD(MOUNT, mountRes, NULL);
     }
   }
   
@@ -575,7 +600,7 @@ void setup()
       // Error again. Repeat until error disappears (or the user forces a reset)
       do
       {
-        printErrSD(0, errCodeSD, NULL);
+        printErrSD(MOUNT, errCodeSD, NULL);
         waitKey();                                // Wait a key to repeat
         errCodeSD = mountSD();
       }
@@ -588,7 +613,7 @@ void setup()
     // Error opening the required file. Repeat until error disappears (or the user forces a reset)
     do
     {
-      printErrSD(1, errCodeSD, fileNameSD);
+      printErrSD(OPEN, errCodeSD, fileNameSD);
       waitKey();                                  // Wait a key to repeat
       errCodeSD = openSD(fileNameSD);
       if (errCodeSD != 3)
@@ -618,7 +643,7 @@ void setup()
       while ((numReadBytes == SEGMENT_SIZE) && (!errCodeSD));   // If numReadBytes < SEGMENT_SIZE -> EOF reached
       if (errCodeSD)
       {
-        printErrSD(2, errCodeSD, fileNameSD);
+        printErrSD(READ, errCodeSD, fileNameSD);
         waitKey();                                // Wait a key to repeat
         seekSD(0);                                // Reset the sector pointer
       }
@@ -916,7 +941,7 @@ void loop()
             diskName[5] = ioData - ((ioData / 10) * 10) + 48;
             diskErr = openSD(diskName);           // Open the "disk file" corresponding to the given disk number
           }
-          else diskErr = 16;                      // Illegal disk number
+          else diskErr = BAD_DISK_NO;             // Illegal disk number
         break;
 
         case  0x0A:
@@ -956,15 +981,18 @@ void loop()
             if ((trackSel < TRACK_COUNT) && (sectSel < SECTOR_COUNT))
             // Sector and track numbers valid
             {
-              diskErr = 0;                      // No errors
+              diskErr = NO_ERROR;             // No errors
             }
             else
             // Sector or track invalid number
             {
-              if (sectSel < SECTOR_COUNT) diskErr = 17;     // Illegal track number
-              else diskErr = 18;                  // Illegal sector number
+              if (sectSel < SECTOR_COUNT)
+              {
+                diskErr = BAD_TRACK_NO;       // Illegal track number
+              }
+              else diskErr = BAD_SECTOR_NO;   // Illegal sector number
             }
-            ioOpcode = 0xFF;                      // All done. Set ioOpcode = "No operation"
+            ioOpcode = 0xFF;                  // All done. Set ioOpcode = "No operation"
           }
           ioByteCnt++;
         break;
@@ -994,13 +1022,16 @@ void loop()
           if ((trackSel < TRACK_COUNT) && (sectSel < SECTOR_COUNT))
           // Sector and track numbers valid
           {
-            diskErr = 0;                        // No errors
+            diskErr = NO_ERROR;                 // No errors
           }
           else
           // Sector or track invalid number
           {
-            if (sectSel < SECTOR_COUNT) diskErr = 17;     // Illegal track number
-            else diskErr = 18;                  // Illegal sector number
+            if (sectSel < SECTOR_COUNT)
+            {
+              diskErr = BAD_TRACK_NO;           // Illegal track number
+            }
+            else diskErr = BAD_SECTOR_NO;       // Illegal sector number
           }
         break;
 
@@ -1058,9 +1089,9 @@ void loop()
             {
               diskErr = writeSD(bufferSD, &numWriBytes);
               if (numWriBytes < SEGMENT_SIZE)
-			  {
-				diskErr = 19; // Reached an unexpected EOF
-			  }
+      			  {
+      				  diskErr = UNEXPECTED_EOF; // Reached an unexpected EOF
+      			  }
               if (ioByteCnt >= (BLOCK_SIZE - 1))
               // Finalize write operation and check result (if no previous error occurred)
               {
@@ -1950,10 +1981,10 @@ byte mountSD()
 {
   if (SD.begin(SS_))
   {
-    return 0;
+    return NO_ERROR;
   }
   Serial.println(F("Failed to mounted SD Card"));
-  return 1;
+  return DISK_ERR;
 }
 
 
@@ -1966,20 +1997,20 @@ byte openSD(const char* fileName)
   if ((openSDFile.name() != NULL) &&
       (strcmp(openSDFile.name(), fileName) == 0))
   {
-    return 0;
+    return NO_ERROR;
   }
   openSDFile = SD.open(fileName, FILE_WRITE);
   if (openSDFile)
   {
     if (openSDFile.seek(0))
     {
-      return 0;
+      return NO_ERROR;
     }
     Serial.printf(F("Failed to seek to start of %s\n\r"), fileName);
-    return 1;
+    return NOT_OPENED;
   }
   Serial.printf(F("Failed to open %s\n\r"), fileName);
-  return 1;
+  return NOT_OPENED;
 }
 
 // ------------------------------------------------------------------------------
@@ -2004,14 +2035,15 @@ byte readSD(void* buffSD, byte* numReadBytes)
     if (numBytes >= 0)
     {
       *numReadBytes = (byte)numBytes;
-      return 0;
+      return NO_ERROR;
     }
     Serial.printf(F("Failed read from %s\n\r"), openSDFile.name());
-    return 1;
+    return NOT_READY;
   }
   else
   {
     Serial.printf(F("File %s is not open\n\r"), openSDFile.name());
+    return NOT_OPENED;
   }
 }
 
@@ -2032,28 +2064,31 @@ byte writeSD(byte* buffSD, byte* numWrittenBytes)
 //
 // NOTE3: To finalize the current write operation a writeSD(NULL, &numWrittenBytes) must be called as last action
 {
-  size_t numBytes;
-  byte  errcode;
-  if (buffSD != NULL)
+  if (openSDFile)
   {
-    numBytes = openSDFile.write((const char *)buffSD, SEGMENT_SIZE);
-    if (numBytes >= 0)
+    size_t numBytes;
+    byte  errcode;
+    if (buffSD != NULL)
     {
-      *numWrittenBytes = (byte) numBytes;
-      return 0;  
+      numBytes = openSDFile.write((const char *)buffSD, SEGMENT_SIZE);
+      if (numBytes >= 0)
+      {
+        *numWrittenBytes = (byte) numBytes;
+        return NO_ERROR;
+      }
+      else
+      {
+        Serial.printf(F("Failed to write %d bytes to file %s\n\r"), numBytes, openSDFile.name());
+        return NOT_READY;
+      }
     }
     else
     {
-      Serial.printf(F("Failed to write %d bytes to file %s\n\r"), numBytes, openSDFile.name());
-      return 1;
+      openSDFile.flush();
+      return NO_ERROR;
     }
   }
-  else
-  {
-    openSDFile.flush();
-    return 0;
-  }
-  return 1;
+  return NOT_OPENED;
 }
 
 // ------------------------------------------------------------------------------
@@ -2067,13 +2102,20 @@ byte seekSD(word sectNum)
 //       16383 = (512 * 32) - 1, where 512 is the number of emulated tracks, 32 is the number of emulated sectors
 //
 {
-  uint32_t offset = ((uint32_t)sectNum) << 9;
-  if (openSDFile.seek(offset))
+  if (openSDFile)
   {
-    return 0;
+    uint32_t offset = ((uint32_t)sectNum) << 9;
+    if (openSDFile.seek(offset))
+    {
+      return NO_ERROR;
+    }
+    else
+    {
+      return NOT_READY;
+    }
   }
 
-  return 1;
+  return NOT_OPENED;
 }
 
 // ------------------------------------------------------------------------------
@@ -2137,22 +2179,23 @@ void printErrSD(byte opType, byte errCode, const char* fileName)
     switch (errCode)
     // See PetitFS implementation for the codes
     {
-      case 1: Serial.print(F("DISK_ERR")); break;
-      case 2: Serial.print(F("NOT_READY")); break;
-      case 3: Serial.print(F("NO_FILE")); break;
-      case 4: Serial.print(F("NOT_OPENED")); break;
-      case 5: Serial.print(F("NOT_ENABLED")); break;
-      case 6: Serial.print(F("NO_FILESYSTEM")); break;
+      case NO_ERROR: Serial.print(F("NO_ERROR")); break;
+      case DISK_ERR: Serial.print(F("DISK_ERR")); break;
+      case NOT_READY: Serial.print(F("NOT_READY")); break;
+      case NO_FILE: Serial.print(F("NO_FILE")); break;
+      case NOT_OPENED: Serial.print(F("NOT_OPENED")); break;
+      case NOT_ENABLED: Serial.print(F("NOT_ENABLED")); break;
+      case NO_FILESYSTEM: Serial.print(F("NO_FILESYSTEM")); break;
       default: Serial.print(F("UNKNOWN")); 
     }
     Serial.print(F(" on "));
     switch (opType)
     {
-      case 0: Serial.print(F("MOUNT")); break;
-      case 1: Serial.print(F("OPEN")); break;
-      case 2: Serial.print(F("READ")); break;
-      case 3: Serial.print(F("WRITE")); break;
-      case 4: Serial.print(F("SEEK")); break;
+      case MOUNT: Serial.print(F("MOUNT")); break;
+      case OPEN: Serial.print(F("OPEN")); break;
+      case READ: Serial.print(F("READ")); break;
+      case WRITE: Serial.print(F("WRITE")); break;
+      case SEEK: Serial.print(F("SEEK")); break;
       default: Serial.print(F("UNKNOWN"));
     }
     Serial.print(F(" operation"));
