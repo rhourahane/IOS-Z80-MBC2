@@ -121,8 +121,8 @@ Notes:
 
 struct OsBootInfo
 {
-  char OsName[16];
-  char BootFile[16];
+  char OsName[20];
+  char BootFile[13];
   word BootAddr;
 };
 
@@ -1992,8 +1992,12 @@ byte mountSD()
   return DISK_ERR;
 }
 
-
 byte openSD(const char* fileName)
+{
+  return openSD(fileName, false);
+}
+
+byte openSD(const char* fileName, bool create)
 // Open an existing file on SD:
 // *  "fileName" is the pointer to the string holding the file name (8.3 format)
 // The returned value is the resulting status (0 = ok, otherwise see printErrSD())
@@ -2004,18 +2008,23 @@ byte openSD(const char* fileName)
   {
     return NO_ERROR;
   }
-  openSDFile = SD.open(fileName, FILE_WRITE);
-  if (openSDFile)
+  if (create || SD.exists(fileName))
   {
-    if (openSDFile.seek(0))
+    openSDFile = SD.open(fileName, FILE_WRITE);
+    if (openSDFile)
     {
-      return NO_ERROR;
+      if (openSDFile.seek(0))
+      {
+        return NO_ERROR;
+      }
+      Serial.printf(F("Failed to seek to start of %s\n\r"), fileName);
+      return NOT_OPENED;
     }
-    Serial.printf(F("Failed to seek to start of %s\n\r"), fileName);
+    Serial.printf(F("Failed to open %s\n\r"), fileName);
     return NOT_OPENED;
   }
-  Serial.printf(F("Failed to open %s\n\r"), fileName);
-  return NOT_OPENED;
+
+  return NO_FILE;
 }
 
 // ------------------------------------------------------------------------------
@@ -2254,7 +2263,7 @@ byte ChangeDiskSet(byte curDiskSet)
     for (int setNum = 0; setNum != maxDiskSet; ++setNum)
     {
       OsBootInfo tmpInfo = GetDiskSetBootInfo(setNum);
-      Serial.printf(F(" %1X: Disk Set %1X (%s)\n\r"), setNum, setNum, tmpInfo.OsName);
+      Serial.printf(F(" %d: Disk Set %d (%s)\n\r"), setNum, setNum, tmpInfo.OsName);
     }
     Serial.print(F("Enter your choice or ESC to return>"));
     FlushRxBuffer();
@@ -2337,9 +2346,15 @@ OsBootInfo GetDiskSetBootInfo(byte setNum)
         tmpInfo.BootAddr = strtol(token, NULL, 0);
       }
 
-      // The initial intent was to save tmpInfo into the .DAT file to save 
-      // parsing the text file each time. Unfortunately PetitFS can't create
-      // or expand files so this is not possible.
+      // Save the new OS configuration to a binary file for faster
+      // loading next time.
+      const char *binName = MkOsDiskSet(setNum);
+      openSDFile = SD.open(binName, FILE_WRITE);
+      if (openSDFile)
+      {
+        openSDFile.write((const char *)(&tmpInfo), sizeof(tmpInfo));
+        openSDFile.close();
+      }
     }
   }
   return tmpInfo;
