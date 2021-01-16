@@ -420,6 +420,13 @@ void setup()
   
   // Find the maximum number of disk sets
   maxDiskSet = FindLastDiskSet();
+  if (SystemOptions.DiskSet >= maxDiskSet)
+  {
+    // Can no longer boot for pervious disk set so select
+    // 0 and go into the boot menu.
+    SystemOptions.DiskSet = 0;
+    bootSelection = 1;
+  }
   byte bootMode = SystemOptions.BootMode;
 
   if ((bootSelection == 1 ) || (bootMode > maxBootMode))
