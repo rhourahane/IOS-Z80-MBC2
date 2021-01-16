@@ -126,14 +126,16 @@ struct OsBootInfo
   word BootAddr;
 };
 
-const OsBootInfo DefaultOsInfo[] PROGMEM = {
-  { "CP/M 2.2", CPMFN, CPMSTRADDR },
-  { "QP/M 2.71", QPMFN, QPMSTRADDR },
-  { "CP/M 3.0", CPM3FN, CPM3STRADDR },
-  { "UCSD Pascal", UCSDFN, UCSDSTRADDR },
-  { "Collapse Os", COSFN, COSSTRADDR }
+struct ConfigOptions
+{
+  byte Valid;               // Set to 1 if values have been saved starts as 0xFF
+  
+  // Use bit fields to reduce space used by flags.
+  byte BootMode : 3;        // Set the program to boot (from flash or SD)
+  byte AutoexecFlag : 1;    // Set to 1 if AUTOEXEC must be executed at CP/M cold boot, 0 otherwise
+  byte ClockMode : 1;       // Z80 clock HI/LO speed selector (0 = 8/10MHz, 1 = 4/5MHz)
+  byte DiskSet;             // Disk set to boot from if BootMode OS boot
 };
-const byte MaxDefaultOsInfo = sizeof(DefaultOsInfo)/sizeof(OsBootInfo);
 
 enum DiskErrCode : byte
 {
@@ -183,17 +185,11 @@ const byte    LD_HL        =  0x36;       // Opcode of the Z80 instruction: LD(H
 const byte    INC_HL       =  0x23;       // Opcode of the Z80 instruction: INC HL
 const byte    LD_HLnn      =  0x21;       // Opcode of the Z80 instruction: LD HL, nn
 const byte    JP_nn        =  0xC3;       // Opcode of the Z80 instruction: JP nn
-const String  compTimeStr  = __TIME__;    // Compile timestamp string
-const String  compDateStr  = __DATE__;    // Compile datestamp string
 const byte    daysOfMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 const byte    debug        = 0;           // Debug off = 0, on = 1, on = 2 with interrupt trace
-const byte    bootModeAddr = 10;          // Internal EEPROM address for boot mode storage
-const byte    autoexecFlagAddr = 12;      // Internal EEPROM address for AUTOEXEC flag storage
-const byte    clockModeAddr = 13;         // Internal EEPROM address for the Z80 clock high/low speed switch
-                                          //  (1 = low speed, 0 = high speed)
-const byte    diskSetAddr  = 14;          // Internal EEPROM address for the current Disk Set [0..9]
 const byte    maxDiskNum   = 99;          // Max number of virtual disks
 const byte    maxDiskSetNum = 10;         // Restrict disk set numbers to 0-9
+const int     configAddr = 0;
 
 // Z80 programs images into flash and related constants
 const word  boot_A_StrAddr = 0xfd10;      // Payload A image starting address (flash)
@@ -238,8 +234,16 @@ const byte  boot_A_[] PROGMEM = {         // Payload A image (S200718 iLoad)
   0x2E, 0xFF, 0x78, 0xCD, 0x2E, 0xFF, 0xC1, 0xF1, 0xC9, 0xF5, 0x3E, 0x01, 0xD3, 0x01, 0xF1, 0xD3, 
   0x00, 0xC9, 0xDB, 0x01, 0xFE, 0xFF, 0xCA, 0x72, 0xFF, 0xC9
   };
-
 const byte * const flashBootTable[1] PROGMEM = {boot_A_}; // Payload pointers table (flash)
+
+const OsBootInfo DefaultOsInfo[] PROGMEM = {
+  { "CP/M 2.2", CPMFN, CPMSTRADDR },
+  { "QP/M 2.71", QPMFN, QPMSTRADDR },
+  { "CP/M 3.0", CPM3FN, CPM3STRADDR },
+  { "UCSD Pascal", UCSDFN, UCSDSTRADDR },
+  { "Collapse Os", COSFN, COSSTRADDR }
+};
+const byte MaxDefaultOsInfo = sizeof(DefaultOsInfo)/sizeof(OsBootInfo);
 
 // ------------------------------------------------------------------------------
 //
@@ -254,7 +258,6 @@ byte          ioOpcode       = 0xFF;      // I/O operation code or Opcode (0xFF 
 word          ioByteCnt;                  // Exchanged bytes counter during an I/O operation
 byte          tempByte;                   // Temporary variable (buffer)
 byte          moduleGPIO     = 0;         // Set to 1 if the module is found, 0 otherwise
-byte          bootMode       = 0;         // Set the program to boot (from flash or SD)
 byte *        BootImage;                  // Pointer to selected flash payload array (image) to boot
 word          BootImageSize  = 0;         // Size of the selected flash payload array (image) to boot
 word          BootStrAddr;                // Starting address of the selected program to boot (from flash or SD)
@@ -262,9 +265,10 @@ byte          Z80IntEnFlag   = 0;         // Z80 INT_ enable flag (0 = No INT_ u
 unsigned long timeStamp;                  // Timestamp for led blinking
 char          inChar;                     // Input char from serial
 byte          iCount;                     // Temporary variable (counter)
-byte          clockMode;                  // Z80 clock HI/LO speed selector (0 = 8/10MHz, 1 = 4/5MHz)
 byte          LastRxIsEmpty;              // "Last Rx char was empty" flag. Is set when a serial Rx operation was done
                                           // when the Rx buffer was empty
+
+ConfigOptions SystemOptions;
 OsBootInfo    BootInfo;
 
 // DS3231 RTC variables
@@ -281,8 +285,6 @@ byte          tempC;                      // Temperature (Celsius) encoded in tw
 byte          bufferSD[SEGMENT_SIZE];     // I/O buffer for SD disk operations (store a "segment" of a SD sector).
                                           // Each SD sector (512 bytes) is divided into N segments (SEGMENT_SIZE bytes each)
 const char *  fileNameSD;                 // Pointer to the string with the currently used file name
-byte          autobootFlag;               // Set to 1 if "autoboot.bin" must be executed at boot, 0 otherwise
-byte          autoexecFlag;               // Set to 1 if AUTOEXEC must be executed at CP/M cold boot, 0 otherwise
 byte          errCodeSD;                  // Temporary variable to store error codes from the PetitFS
 byte          numReadBytes;               // Number of read bytes after a readSD() call
 
@@ -295,7 +297,6 @@ byte          sectSel;                    // Store the current sector number [0.
 byte          diskErr         = 19;       // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
                                           // error code
 byte          numWriBytes;                // Number of written bytes after a writeSD() call
-byte          diskSet;                    // Current "Disk Set"
 byte          maxDiskSet      = 5;        // Number of configured Disk Sets (default to number of built in disk sets)
 
 // ------------------------------------------------------------------------------
@@ -325,6 +326,13 @@ void setup()
   Serial.begin(115200);
   Serial.println(F("\r\n\nZ80-MBC2 - " HW_VERSION "\r\nIOS - I/O Subsystem - " SW_VERSION "\r\n"));
 
+  EEPROM.get(configAddr, SystemOptions);
+  if (SystemOptions.Valid != 1)
+  {
+    EEPROM.put(configAddr, SystemOptions);
+    PrintSystemOptions(SystemOptions, F("Saved initial "));
+  }
+  
   // Initialize RESET_ and WAIT_RES_
   pinMode(RESET_, OUTPUT);                        // Configure RESET_ and set it ACTIVE
   digitalWrite(RESET_, LOW);
@@ -375,14 +383,6 @@ void setup()
   digitalWrite(MCU_RTS_, HIGH); 
   delay(500);
 
-  // Read the Z80 CPU speed mode
-  if (EEPROM.read(clockModeAddr) > 1)             // Check if it is a valid value, otherwise set it to low speed
-  // Not a valid value. Set it to low speed
-  {
-    EEPROM.update(clockModeAddr, 1);
-  }
-  clockMode = EEPROM.read(clockModeAddr);         // Read the previous stored value
-
   // Initialize the EXP_PORT (I2C) and search for "known" optional modules
   Wire.begin();                                   // Wake up I2C bus
   Wire.beginTransmission(GPIOEXP_ADDR);
@@ -392,7 +392,7 @@ void setup()
   if (SERIAL_RX_BUFFER_SIZE >= 128) Serial.println(F("IOS: Found extended serial Rx buffer"));
 
   // Print the Z80 clock speed mode
-  Serial.printf(F("IOS: Z80 clock set at %dMHz\n\r"), clockMode ? CLOCK_LOW : CLOCK_HIGH);
+  Serial.printf(F("IOS: Z80 clock set at %dMHz\n\r"), SystemOptions.ClockMode ? CLOCK_LOW : CLOCK_HIGH);
 
   // Print RTC and GPIO informations if found
   foundRTC = autoSetRTC();                        // Check if RTC is present and initialize it as needed
@@ -400,9 +400,7 @@ void setup()
 
   // Print CP/M Autoexec on cold boot status
   Serial.print(F("IOS: CP/M Autoexec is "));
-  if (EEPROM.read(autoexecFlagAddr) > 1) EEPROM.update(autoexecFlagAddr, 0); // Reset AUTOEXEC flag to OFF if invalid
-  autoexecFlag = EEPROM.read(autoexecFlagAddr);   // Read the previous stored AUTOEXEC flag
-  if (autoexecFlag) Serial.println(F("ON"));
+  if (SystemOptions.AutoexecFlag) Serial.println(F("ON"));
   else Serial.println(F("OFF"));
 
   // ----------------------------------------
@@ -420,18 +418,16 @@ void setup()
     }
   }
   
-  bootMode = EEPROM.read(bootModeAddr);           // Read the previous stored boot mode
-
   // Find the maximum number of disk sets
   maxDiskSet = FindLastDiskSet();
-
-  // Read the stored Disk Set. If not valid set it to 0
-  diskSet = EEPROM.read(diskSetAddr);
-  if (diskSet >= maxDiskSet) 
+  if (SystemOptions.DiskSet >= maxDiskSet)
   {
-    EEPROM.update(diskSetAddr, 0);
-    diskSet =0;
+    // Can no longer boot for pervious disk set so select
+    // 0 and go into the boot menu.
+    SystemOptions.DiskSet = 0;
+    bootSelection = 1;
   }
+  byte bootMode = SystemOptions.BootMode;
 
   if ((bootSelection == 1 ) || (bootMode > maxBootMode))
   // Enter in the boot selection menu if USER key was pressed at startup 
@@ -452,16 +448,16 @@ void setup()
       Serial.println(F(" 1: Basic"));   
       Serial.println(F(" 2: Forth"));
       Serial.print(F(" 3: Load OS from "));
-      printOsName(diskSet);
+      printOsName(SystemOptions.DiskSet);
       Serial.println(F("\r\n 4: Autoboot"));
       Serial.println(F(" 5: iLoad"));
-      Serial.printf(F(" 6: Change Z80 clock speed (->%dMHz)\r\n"), clockMode ? CLOCK_LOW : CLOCK_HIGH);
+      Serial.printf(F(" 6: Change Z80 clock speed (->%dMHz)\r\n"), SystemOptions.ClockMode ? CLOCK_LOW : CLOCK_HIGH);
       Serial.print(F(" 7: Toggle CP/M Autoexec (->"));
-      if (autoexecFlag) Serial.print(F("ON"));
+      if (SystemOptions.AutoexecFlag) Serial.print(F("ON"));
       else Serial.print(F("OFF"));
       Serial.println(F(")"));
       Serial.print(F(" 8: Change "));
-      printOsName(diskSet);
+      printOsName(SystemOptions.DiskSet);
       Serial.println();
   
       // If RTC module is present add a menu choice
@@ -488,18 +484,15 @@ void setup()
       switch (inChar)
       {
         case '6':                                   // Change the clock speed of the Z80 CPU
-          clockMode = !clockMode;                   // Toggle Z80 clock speed mode (High/Low)
-          EEPROM.update(clockModeAddr, clockMode);  // Save it to the internal EEPROM
+          SystemOptions.ClockMode = !SystemOptions.ClockMode;                   // Toggle Z80 clock speed mode (High/Low)
         break;
   
         case '7':                                   // Toggle CP/M AUTOEXEC execution on cold boot
-          autoexecFlag = !autoexecFlag;             // Toggle AUTOEXEC executiont status
-          EEPROM.update(autoexecFlagAddr, autoexecFlag); // Save it to the internal EEPROM
+          SystemOptions.AutoexecFlag = !SystemOptions.AutoexecFlag;             // Toggle AUTOEXEC executiont status
         break;
   
         case '8':                                   // Change current Disk Set
-          diskSet = ChangeDiskSet(diskSet);
-          EEPROM.update(diskSetAddr, diskSet);
+          SystemOptions.DiskSet = ChangeDiskSet(SystemOptions.DiskSet);
         break;
   
         case '9':                                   // Change RTC Date/Time
@@ -510,15 +503,24 @@ void setup()
         
     // Save selectd boot program if changed
     bootMode = inChar - '1';                      // Calculate bootMode from inChar
-    if (bootMode <= maxBootMode) EEPROM.update(bootModeAddr, bootMode); // Save to the internal EEPROM if required
-    else bootMode = EEPROM.read(bootModeAddr);    // Reload boot mode if '0' or > '5' choice selected
+    if (bootMode <= maxBootMode)
+    {
+      SystemOptions.BootMode = bootMode; // Save to the internal EEPROM if required
+    }
+    else
+    {
+      bootMode = SystemOptions.BootMode;    // Reload boot mode if '0' or > '5' choice selected
+    }
+  
+    EEPROM.put(configAddr, SystemOptions);
+    PrintSystemOptions(SystemOptions, F("Saved updated "));
   }
 
   // Print current Disk Set and OS name (if OS boot is enabled)
   if (bootMode == 2)
   {
     Serial.print(F("IOS: Current "));
-    printOsName(diskSet);
+    printOsName(SystemOptions.DiskSet);
     Serial.println();
   }
 
@@ -541,7 +543,7 @@ void setup()
     break;
 
     case 2:                                       // Load an OS from current Disk Set on SD
-      BootInfo = GetDiskSetBootInfo(diskSet);
+      BootInfo = GetDiskSetBootInfo(SystemOptions.DiskSet);
       fileNameSD = BootInfo.BootFile;
       BootStrAddr = BootInfo.BootAddr;
     break;
@@ -677,7 +679,7 @@ void setup()
   TCCR2 &= ~(1 << WGM20);
   TCCR2 |= (1 <<  COM20);                 // Set "toggle OC2 on compare match"
   TCCR2 &= ~(1 << COM21);
-  OCR2 = clockMode;                       // Set the compare value to toggle OC2 (0 = high or 1 = low)
+  OCR2 = SystemOptions.ClockMode;                       // Set the compare value to toggle OC2 (0 = high or 1 = low)
 #else
   TCCR2B |= (1 << CS20);                  // Set Timer2 clock to "no prescaling"
   TCCR2B &= ~((1 << CS21) | (1 << CS22));
@@ -685,7 +687,7 @@ void setup()
   TCCR2A &= ~(1 << WGM20);
   TCCR2A |= (1 <<  COM2A0);               // Set "toggle OC2 on compare match"
   TCCR2A &= ~(1 << COM2A1);
-  OCR2A = clockMode;                      // Set the compare value to toggle OC2 (0 = high or 1 = low)
+  OCR2A = SystemOptions.ClockMode;                      // Set the compare value to toggle OC2 (0 = high or 1 = low)
 #endif
   pinMode(CLK, OUTPUT);                           // Set OC2 as output and start to output the clock
   Serial.println(F("IOS: Z80 is running from now"));
@@ -936,7 +938,7 @@ void loop()
           if (ioData <= maxDiskNum)               // Valid disk number
           // Set the name of the file to open as virtual disk, and open it
           {
-            diskName[2] = diskSet + 48;           // Set the current Disk Set
+            diskName[2] = SystemOptions.DiskSet + 48;           // Set the current Disk Set
             diskName[4] = (ioData / 10) + 48;     // Set the disk number
             diskName[5] = ioData - ((ioData / 10) * 10) + 48;
             diskErr = openSD(diskName);           // Open the "disk file" corresponding to the given disk number
@@ -1315,7 +1317,7 @@ void loop()
             //
             // NOTE: Currently only D0-D3 are used
 
-            ioData = autoexecFlag | (foundRTC << 1) | ((Serial.available() > 0) << 2) | ((LastRxIsEmpty > 0) << 3);
+            ioData = SystemOptions.AutoexecFlag | (foundRTC << 1) | ((Serial.available() > 0) << 2) | ((LastRxIsEmpty > 0) << 3);
           break;
 
           case  0x84:
@@ -1637,6 +1639,9 @@ byte autoSetRTC()
   if (OscStopFlag)
   // RTC oscillator stopped. RTC must be set at compile date/time
   {
+    String  compTimeStr(F(" __TIME__"));    // Compile timestamp string
+    String  compDateStr(F("__DATE__"));    // Compile datestamp string
+    
     // Convert compile time strings to numeric values
     seconds = compTimeStr.substring(6,8).toInt();
     minutes = compTimeStr.substring(3,5).toInt();
@@ -1700,7 +1705,7 @@ void printDateTime(byte readSourceFlag)
   {
     readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
   }
-  Serial.printf(F("%2d/%2d/%2d %2d:%2d:%2d"), day, month, year, hours, minutes, seconds);
+  Serial.printf(F("%2d/%02d/%02d %02d:%02d:%02d"), day, month, year, hours, minutes, seconds);
 }
 
 // ------------------------------------------------------------------------------
@@ -2350,4 +2355,15 @@ const char *MkTxtDiskSet(byte setNum)
 {
     OsNameTx[2] = setNum + '0';
     return OsNameTx;
+}
+
+void PrintSystemOptions(const ConfigOptions &options, const __FlashStringHelper *msg)
+{
+  Serial.print(msg);
+  Serial.println(F("configOptions are:"));
+  Serial.printf(F("Valid = %d\n\r"), options.Valid);
+  Serial.printf(F("BootMode = %d\n\r"), options.BootMode);
+  Serial.printf(F("ClockMode = %d\n\r"), options.ClockMode);
+  Serial.printf(F("DiskSet = %d\n\r"), options.DiskSet);
+  Serial.printf(F("AutoexecFlag = %d\n\r"), options.AutoexecFlag);
 }
