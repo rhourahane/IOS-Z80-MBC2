@@ -53,22 +53,17 @@ byte          ioAddress;                  // Virtual I/O address. Only two possi
 byte          ioData;                     // Data byte used for the I/O operation
 byte          ioOpcode       = 0xFF;      // I/O operation code or Opcode (0xFF means "No Operation")
 word          ioByteCnt;                  // Exchanged bytes counter during an I/O operation
-byte          tempByte;                   // Temporary variable (buffer)
 byte          moduleGPIO     = 0;         // Set to 1 if the module is found, 0 otherwise
 byte *        BootImage;                  // Pointer to selected flash payload array (image) to boot
 word          BootImageSize  = 0;         // Size of the selected flash payload array (image) to boot
 word          BootStrAddr;                // Starting address of the selected program to boot (from flash or SD)
 byte          Z80IntEnFlag   = 0;         // Z80 INT_ enable flag (0 = No INT_ used, 1 = INT_ used for I/O)
-unsigned long timeStamp;                  // Timestamp for led blinking
-char          inChar;                     // Input char from serial
-byte          iCount;                     // Temporary variable (counter)
 byte          LastRxIsEmpty;              // "Last Rx char was empty" flag. Is set when a serial Rx operation was done
                                           // when the Rx buffer was empty
 
 ConfigOptions SystemOptions;
 OsBootInfo    BootInfo;
 
-byte          errCodeSD;                  // Temporary variable to store error codes from the PetitFS
 byte          numReadBytes;               // Number of read bytes after a readSD() call
 
 // Disk emulation on SD
@@ -78,7 +73,6 @@ byte          sectSel;                    // Store the current sector number [0.
 byte          diskErr         = 19;       // SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT or SDMOUNT resulting 
                                           // error code
 byte          numWriBytes;                // Number of written bytes after a writeSD() call
-byte          maxDiskSet      = 5;        // Number of configured Disk Sets (default to number of built in disk sets)
 
 // ------------------------------------------------------------------------------
 
@@ -197,7 +191,7 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
   }
   
   // Find the maximum number of disk sets
-  maxDiskSet = FindLastDiskSet();
+  byte maxDiskSet = FindLastDiskSet();
   if (SystemOptions.DiskSet >= maxDiskSet)
   {
     // Can no longer boot for pervious disk set so select
@@ -289,9 +283,12 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
   }
   // DEBUG END ------------------------------
   //
+  
   if (bootMode < maxBootMode)
   // Load from SD
   {
+    byte errCodeSD;
+    
     // Mount a volume on SD
     if (mountSD())
     // Error mounting. Try again
@@ -335,7 +332,7 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
       // Read a "segment" of a SD sector and load it into RAM
       {
         errCodeSD = readSD(bufferSD, &numReadBytes);  // Read current "segment" (SEGMENT_SIZE bytes) of the current SD serctor
-        for (iCount = 0; iCount < numReadBytes; iCount++)
+        for (int iCount = 0; iCount < numReadBytes; iCount++)
         // Load the read "segment" into RAM
         {
           loadByteToRAM(bufferSD[iCount]);        // Write current data byte into RAM
@@ -403,6 +400,8 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
 
 void loop() 
 {
+  byte tempByte;
+  
   if (!digitalRead(WAIT_))
   // I/O operaton requested
   {
@@ -1148,11 +1147,14 @@ void loop()
               {
                 diskErr = readSD(bufferSD, &numReadBytes); 
                 if (numReadBytes < SEGMENT_SIZE)
-				{
-				  diskErr = 19;    // Reached an unexpected EOF
-				}
+            		{
+            		  diskErr = 19;    // Reached an unexpected EOF
+            		}
               }
-              if (!diskErr) ioData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU
+              if (!diskErr)
+              {
+                ioData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU
+              }
             }
             if (ioByteCnt >= (BLOCK_SIZE - 1)) 
             {
@@ -1234,12 +1236,6 @@ void serialEvent()
 {
   if ((Serial.available()) && Z80IntEnFlag) digitalWrite(INT_, LOW);
 }
-
-// ------------------------------------------------------------------------------
-
-
-
-
 
 // ------------------------------------------------------------------------------
 
