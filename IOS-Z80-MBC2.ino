@@ -31,9 +31,12 @@ Notes:
 #include "BootMenu.h"
 #include "Utils.h"
 #include "DiskUtils.h"
+#include "Opcodes.h"
+#include "FatSystem.h"
 
 #define HW_VERSION "A040618"
 #define SW_VERSION "RMH-OS-SD"
+
 
 // ------------------------------------------------------------------------------
 //
@@ -51,7 +54,7 @@ const byte    debug        = 0;           // Debug off = 0, on = 1, on = 2 with 
 // General purpose variables
 byte          ioAddress;                  // Virtual I/O address. Only two possible addresses are valid (0x00 and 0x01)
 byte          ioData;                     // Data byte used for the I/O operation
-byte          ioOpcode       = 0xFF;      // I/O operation code or Opcode (0xFF means "No Operation")
+byte          ioOpcode       = NO_OP;     // I/O operation code or Opcode (0xFF means "No Operation")
 word          ioByteCnt;                  // Exchanged bytes counter during an I/O operation
 byte          moduleGPIO     = 0;         // Set to 1 if the module is found, 0 otherwise
 byte *        BootImage;                  // Pointer to selected flash payload array (image) to boot
@@ -74,11 +77,12 @@ byte          diskErr         = 19;       // SELDISK, SELSECT, SELTRACK, WRITESE
                                           // error code
 byte          numWriBytes;                // Number of written bytes after a writeSD() call
 
+FatSystem fatSystem;
+
 // ------------------------------------------------------------------------------
 
 void setup() 
 {
-  
 // ------------------------------------------------------------------------------
 //
 //  Local variables
@@ -158,22 +162,37 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
   // Initialize the EXP_PORT (I2C) and search for "known" optional modules
   Wire.begin();                                   // Wake up I2C bus
   Wire.beginTransmission(GPIOEXP_ADDR);
-  if (Wire.endTransmission() == 0) moduleGPIO = 1;// Set to 1 if GPIO Module is found
+  if (Wire.endTransmission() == 0)
+  {
+    moduleGPIO = 1;// Set to 1 if GPIO Module is found
+  }
   
   // Print if the input serial buffer is 128 bytes wide (this is needed for xmodem protocol support)
-  if (SERIAL_RX_BUFFER_SIZE >= 128) Serial.println(F("IOS: Found extended serial Rx buffer"));
+  if (SERIAL_RX_BUFFER_SIZE >= 128)
+  {
+    Serial.println(F("IOS: Found extended serial Rx buffer"));
+  }
 
   // Print the Z80 clock speed mode
   Serial.printf(F("IOS: Z80 clock set at %dMHz\n\r"), SystemOptions.ClockMode ? CLOCK_LOW : CLOCK_HIGH);
 
   // Print RTC and GPIO informations if found
   foundRTC = autoSetRTC();                        // Check if RTC is present and initialize it as needed
-  if (moduleGPIO) Serial.println(F("IOS: Found GPE Option"));
-
+  if (moduleGPIO)
+  {
+    Serial.println(F("IOS: Found GPE Option"));
+  }
+  
   // Print CP/M Autoexec on cold boot status
   Serial.print(F("IOS: CP/M Autoexec is "));
-  if (SystemOptions.AutoexecFlag) Serial.println(F("ON"));
-  else Serial.println(F("OFF"));
+  if (SystemOptions.AutoexecFlag)
+  {
+    Serial.println(F("ON"));
+  }
+  else
+  {
+    Serial.println(F("OFF"));
+  }
 
   // ----------------------------------------
   // BOOT SELECTION AND SYS PARAMETERS MENU
@@ -396,8 +415,6 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
   digitalWrite(RESET_, HIGH);                     // Release Z80 from reset and let it run
 }
 
-// ------------------------------------------------------------------------------
-
 void loop() 
 {
   byte tempByte;
@@ -446,6 +463,7 @@ void loop()
       // Opcode 0x0B  SELSECT         1  
       // Opcode 0x0C  WRITESECT       512
       // Opcode 0x0D  SETBANK         1
+      // Opcode 0x0E  SETPATH         12
       // Opcode 0xFF  No operation    1
       //
       //
@@ -873,9 +891,16 @@ void loop()
             break;  
           }
         break;
-        
+        case SETPATH:
+          fatSystem.SetPath(ioData);
+        break;
         }
-        if ((ioOpcode != 0x0A) && (ioOpcode != 0x0C)) ioOpcode = 0xFF;    // All done for the single byte opcodes. 
+        if ((ioOpcode != 0x0A) &&
+            (ioOpcode != 0x0C) &&
+            (ioOpcode != SETPATH))
+        {
+          ioOpcode = 0xFF;    // All done for the single byte opcodes. 
+        }
                                                                           //  Set ioOpcode = "No operation"
       }
       
@@ -1179,9 +1204,18 @@ void loop()
             // NOTE 3: Only for this disk opcode, the resulting error is read as a data byte without using the 
             //         ERRDISK opcode
             ioData = mountSD();
-          break;          
+          break;
+
+          case READDIR:
+            ioOpcode = fatSystem.ReadNextDir(ioData);
+          break;
           }
-          if ((ioOpcode != 0x84) && (ioOpcode != 0x86)) ioOpcode = 0xFF;  // All done for the single byte opcodes. 
+          if ((ioOpcode != 0x84) &&
+              (ioOpcode != 0x86) &&
+              (ioOpcode != READDIR))
+          {
+            ioOpcode = NO_OP;  // All done for the single byte opcodes. 
+          }
                                                                           //  Set ioOpcode = "No operation"
         }
         DDRA = 0xFF;                              // Configure Z80 data bus D0-D7 (PA0-PA7) as output
