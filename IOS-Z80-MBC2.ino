@@ -30,6 +30,7 @@ Notes:
 #include "ConfigOptions.h"
 #include "BootMenu.h"
 #include "Utils.h"
+#include "WireUtils.h"
 #include "DiskUtils.h"
 #include "Opcodes.h"
 #include "FatSystem.h"
@@ -160,9 +161,8 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
   delay(500);
 
   // Initialize the EXP_PORT (I2C) and search for "known" optional modules
-  Wire.begin();                                   // Wake up I2C bus
-  Wire.beginTransmission(GPIOEXP_ADDR);
-  if (Wire.endTransmission() == 0)
+  Wire.begin();
+  if (ProbeAddress(GPIOEXP_ADDR))
   {
     moduleGPIO = 1;// Set to 1 if GPIO Module is found
   }

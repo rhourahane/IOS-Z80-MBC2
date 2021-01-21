@@ -2,6 +2,7 @@
 
 #include "RtcUtilities.h"
 #include "HwDefines.h"
+#include "WireUtils.h"
 #include "Utils.h"
 
 // ------------------------------------------------------------------------------
@@ -26,21 +27,20 @@ byte tempC;
 void readRTC(byte *second, byte *minute, byte *hour, byte *day, byte *month, byte *year, byte *tempC)
 // Read current date/time binary values and the temprerature (2 complement) from the DS3231 RTC
 {
-  byte    i;
-  Wire.beginTransmission(DS3231_RTC);
-  Wire.write(DS3231_SECRG);                       // Set the DS3231 Seconds Register
-  Wire.endTransmission();
-  // Read from RTC and convert to binary
-  Wire.requestFrom(DS3231_RTC, 18);
-  *second = bcdToDec(Wire.read() & 0x7f);
-  *minute = bcdToDec(Wire.read());
-  *hour = bcdToDec(Wire.read() & 0x3f);
-  Wire.read();                                    // Jump over the DoW
-  *day = bcdToDec(Wire.read());
-  *month = bcdToDec(Wire.read());
-  *year = bcdToDec(Wire.read());
-  for (i = 0; i < 10; i++) Wire.read();           // Jump over 10 registers
-  *tempC = Wire.read();
+  byte buffer[18];
+  ReadRegisters(DS3231_RTC, DS3231_SECRG, 18, buffer);
+  
+  byte *ptr = buffer;
+  *second = bcdToDec(*ptr++ & 0x7f);
+  *minute = bcdToDec(*ptr++);
+  *hour = bcdToDec(*ptr++ & 0x3f);
+  ++ptr; // Skip DoW
+  *day = bcdToDec(*ptr++);
+  *month = bcdToDec(*ptr++);
+  *year = bcdToDec(*ptr++);
+
+  ptr += 10;
+  *tempC = *ptr;
 }
 
 // ------------------------------------------------------------------------------
@@ -48,16 +48,18 @@ void readRTC(byte *second, byte *minute, byte *hour, byte *day, byte *month, byt
 void writeRTC(byte second, byte minute, byte hour, byte day, byte month, byte year)
 // Write given date/time binary values to the DS3231 RTC
 {
-  Wire.beginTransmission(DS3231_RTC);
-  Wire.write(DS3231_SECRG);                       // Set the DS3231 Seconds Register
-  Wire.write(decToBcd(second));
-  Wire.write(decToBcd(minute));
-  Wire.write(decToBcd(hour));
-  Wire.write(1);                                  // Day of week not used (always set to 1 = Sunday)
-  Wire.write(decToBcd(day));
-  Wire.write(decToBcd(month));
-  Wire.write(decToBcd(year));
-  Wire.endTransmission();
+  byte buffer[7];
+  byte *ptr = buffer;
+
+  *ptr++ = decToBcd(second);
+  *ptr++ = decToBcd(minute);
+  *ptr++ = decToBcd(hour);
+  *ptr++ = 1;                                  // Day of week not used (always set to 1 = Sunday)
+  *ptr++ = decToBcd(day);
+  *ptr++ = decToBcd(month);
+  *ptr = decToBcd(year);
+
+  WriteRegisters(DS3231_RTC, DS3231_SECRG, 7, buffer);
 }
 
 // ------------------------------------------------------------------------------
@@ -69,11 +71,11 @@ byte autoSetRTC()
 {
   byte    OscStopFlag;
 
-  Wire.beginTransmission(DS3231_RTC);
-  if (Wire.endTransmission() != 0)
+  if (!ProbeAddress(DS3231_RTC))
   {
     return 0;      // RTC not found
   }
+  
   Serial.print(F("IOS: Found RTC DS3231 Module ("));
   printDateTime(1);
   Serial.println(F(")"));
@@ -84,11 +86,8 @@ byte autoSetRTC()
   Serial.println(F("C"));
   
   // Read the "Oscillator Stop Flag"
-  Wire.beginTransmission(DS3231_RTC);
-  Wire.write(DS3231_STATRG);                      // Set the DS3231 Status Register
-  Wire.endTransmission();
-  Wire.requestFrom(DS3231_RTC, 1);
-  OscStopFlag = Wire.read() & 0x80;               // Read the "Oscillator Stop Flag"
+  ReadRegisters(DS3231_RTC, DS3231_STATRG, 1, &OscStopFlag);
+  OscStopFlag &= 0x80;
 
   if (OscStopFlag)
   // RTC oscillator stopped. RTC must be set at compile date/time
@@ -139,10 +138,8 @@ byte autoSetRTC()
     }
 
     // Reset the "Oscillator Stop Flag" 
-    Wire.beginTransmission(DS3231_RTC);
-    Wire.write(DS3231_STATRG);                    // Set the DS3231 Status Register
-    Wire.write(0x08);                             // Reset the "Oscillator Stop Flag" (32KHz output left enabled)
-    Wire.endTransmission();
+    OscStopFlag = 0x08;
+    WriteRegisters(DS3231_RTC, DS3231_STATRG, 1, &OscStopFlag);
   }
   return 1;
 }
