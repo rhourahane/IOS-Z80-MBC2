@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-byte ProbeAddress(byte address)
+byte ProbeAddress(uint8_t address)
 {
   Wire.beginTransmission(address);
   if (Wire.endTransmission() != 0)
@@ -12,7 +12,7 @@ byte ProbeAddress(byte address)
   return 1;
 }
 
-byte WriteRegisters(byte address, byte regAddr, int byteCount, byte *buffer)
+byte WriteRegisters(uint8_t address, uint8_t regAddr, uint8_t byteCount, byte *buffer)
 {
     Wire.beginTransmission(address);
     Wire.write(regAddr);
@@ -21,7 +21,7 @@ byte WriteRegisters(byte address, byte regAddr, int byteCount, byte *buffer)
     return Wire.endTransmission();
 }
 
-byte ReadRegisters(byte address, byte regAddr, int byteCount, byte *buffer)
+byte ReadRegisters(uint8_t address, uint8_t regAddr, uint8_t byteCount, byte *buffer)
 {
   // Setup the register address
   Wire.beginTransmission(address);

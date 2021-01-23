@@ -530,10 +530,7 @@ void loop()
           
           if (moduleGPIO) 
           {
-            Wire.beginTransmission(GPIOEXP_ADDR);
-            Wire.write(GPIOA_REG);                // Select GPIOA
-            Wire.write(ioData);                   // Write value
-            Wire.endTransmission();
+            WriteRegisters(GPIOEXP_ADDR, GPIOA_REG, 1, &ioData);
           }
         break;
         
@@ -546,10 +543,7 @@ void loop()
           
           if (moduleGPIO) 
           {
-            Wire.beginTransmission(GPIOEXP_ADDR);
-            Wire.write(GPIOB_REG);                // Select GPIOB
-            Wire.write(ioData);                   // Write value
-            Wire.endTransmission();
+            WriteRegisters(GPIOEXP_ADDR, GPIOB_REG, 1, &ioData);
           }
         break;
         
@@ -562,10 +556,7 @@ void loop()
           
           if (moduleGPIO) 
           {
-            Wire.beginTransmission(GPIOEXP_ADDR);
-            Wire.write(IODIRA_REG);               // Select IODIRA
-            Wire.write(ioData);                   // Write value
-            Wire.endTransmission();
+            WriteRegisters(GPIOEXP_ADDR, IODIRA_REG, 1, &ioData);
           }
         break;
         
@@ -578,10 +569,7 @@ void loop()
           
           if (moduleGPIO) 
           {
-            Wire.beginTransmission(GPIOEXP_ADDR);
-            Wire.write(IODIRB_REG);               // Select IODIRB
-            Wire.write(ioData);                   // Write value
-            Wire.endTransmission();
+            WriteRegisters(GPIOEXP_ADDR, IODIRB_REG, 1, &ioData);
           }
         break;
         
@@ -594,10 +582,7 @@ void loop()
           
           if (moduleGPIO) 
           {
-            Wire.beginTransmission(GPIOEXP_ADDR);
-            Wire.write(GPPUA_REG);                // Select GPPUA
-            Wire.write(ioData);                   // Write value
-            Wire.endTransmission();
+            WriteRegisters(GPIOEXP_ADDR, GPPUA_REG, 1, &ioData);
           }
         break;
         
@@ -610,10 +595,7 @@ void loop()
           
           if (moduleGPIO) 
           {
-            Wire.beginTransmission(GPIOEXP_ADDR);
-            Wire.write(GPPUB_REG);                // Select GPPUB
-            Wire.write(ioData);                   // Write value
-            Wire.endTransmission();
+            WriteRegisters(GPIOEXP_ADDR, GPPUB_REG, 1, &ioData);
           }
         break;
         
