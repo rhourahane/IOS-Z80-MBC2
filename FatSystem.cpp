@@ -16,20 +16,16 @@ byte FatSystem::SetPath(byte ioByte)
   
   if (ioByte == 0)
   {
-    Serial.printf(F("Set path to %s\n\r"), filePath.c_str());
     openFile = SD.open(filePath.c_str());
-    if (openFile)
-    {
-      Serial.printf(F("Opened file name [%s] size %d dir %d\n\r"), openFile.name(), openFile.size(), openFile.isDirectory());
-    }
 
     lastOpCode = NO_OP;
-    return NO_OP;
   }
   else
   {
       filePath.concat((char)ioByte);
   }
+  
+  return lastOpCode;
 }
 
 byte FatSystem::ReadNextDir(byte &ioByte)
@@ -43,6 +39,11 @@ byte FatSystem::ReadNextDir(byte &ioByte)
 
   if (openFile && ioCount == 0)
   {
+    if (dirCount == 0)
+    {
+      openFile.rewindDirectory();
+    }
+    
     File entry = openFile.openNextFile();
     if (entry)
     {
