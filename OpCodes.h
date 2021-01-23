@@ -17,6 +17,7 @@ enum OpCodes : byte
   WRITESECT    = 0x0C,
   SETBANK      = 0x0D,
   SETPATH      = 0x0E,
+  SETSEGMENT   = 0x0F,
 
   // Read OpCodes start from 0x80
   USER_KEY     = 0x80,
@@ -28,6 +29,7 @@ enum OpCodes : byte
   READSECT     = 0x86,
   SDMOUNT      = 0x87,
   READDIR      = 0x88,
+  READFILE     = 0x89,
       
   NO_OP        = 0xFF
 };

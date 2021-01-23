@@ -82,6 +82,68 @@ byte FatSystem::ReadNextDir(byte &ioByte)
   return lastOpCode;
 }
 
+byte FatSystem::SetSegment(byte ioByte)
+{
+  if (lastOpCode != SETSEGMENT)
+  {
+    ioCount = 1;
+    segment = ioByte;
+    lastOpCode = SETSEGMENT;
+  }
+  else
+  {
+    if (ioCount == 1)
+    {
+      segment += (uint16_t)ioByte << 8;
+      lastOpCode = NO_OP;
+    }
+  }
+
+  return lastOpCode;
+}
+
+byte FatSystem::ReadFile(byte &ioByte)
+{
+  if (lastOpCode != READFILE)
+  {
+    ioCount = 0;
+    if (openFile)
+    {
+      if (openFile.seek(segment << 7))
+      {
+        maxIoCount = openFile.read(ioBuffer, sizeof(ioBuffer));
+        Serial.printf(F("Read offset %d bytes read %d\n\r"), segment << 7, maxIoCount);
+        if (maxIoCount > 0)
+        {
+          lastOpCode = READFILE;
+        }
+      }
+      else
+      {
+        Serial.printf(F("Failed to seek to %d\n\r"), segment << 7);
+        maxIoCount = 0;
+      }
+    }
+    else
+    {
+      Serial.printf(F("File not open\n\r"));
+      maxIoCount = 0;
+    }
+    ioByte = maxIoCount;
+  }
+  else
+  {
+    ioByte = ioBuffer[ioCount++];
+    if (ioCount == maxIoCount)
+    {
+      Serial.printf(F("Finished reading segment of %d\n\r"), maxIoCount);
+      lastOpCode = NO_OP;
+    }
+  }
+
+  return lastOpCode;
+}
+
 void FatSystem::CopyFileInfo(File &file, FileInfo &info)
 {
   strncpy(info.name, file.name(), 12);

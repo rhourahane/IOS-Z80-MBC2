@@ -13,6 +13,9 @@ public:
   
   byte SetPath(byte ioByte);
   byte ReadNextDir(byte &ioByte);
+
+  byte SetSegment(byte ioByte);
+  byte ReadFile(byte &ioByte);
   
 private:
   struct FileInfo
@@ -29,7 +32,10 @@ private:
   byte ioCount;
   byte lastOpCode;
   uint8_t dirCount;
+  uint16_t segment;
   FileInfo fileInfo;
+  byte ioBuffer[128];
+  byte maxIoCount;
 };
 
 #endif

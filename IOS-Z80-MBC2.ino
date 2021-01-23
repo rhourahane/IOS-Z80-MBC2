@@ -874,12 +874,20 @@ void loop()
           }
         break;
         case SETPATH:
-          fatSystem.SetPath(ioData);
+          ioOpcode = fatSystem.SetPath(ioData);
         break;
+
+        case SETSEGMENT:
+          // SET SEGMENT
+          // SETSEGMENT - Set the segment to be read.written from a FAT file each segment is 128 except for the last that
+          //              might be less.
+          ioOpcode = fatSystem.SetSegment(ioData);
+        break;            
         }
         if ((ioOpcode != 0x0A) &&
             (ioOpcode != 0x0C) &&
-            (ioOpcode != SETPATH))
+            (ioOpcode != SETPATH) &&
+            (ioOpcode != SETSEGMENT))
         {
           ioOpcode = 0xFF;    // All done for the single byte opcodes. 
         }
@@ -1195,10 +1203,15 @@ void loop()
             // 
             ioOpcode = fatSystem.ReadNextDir(ioData);
           break;
+
+          case READFILE:
+            ioOpcode = fatSystem.ReadFile(ioData);
+          break;
           }
           if ((ioOpcode != 0x84) &&
               (ioOpcode != 0x86) &&
-              (ioOpcode != READDIR))
+              (ioOpcode != READDIR) &&
+              (ioOpcode != READFILE))
           {
             ioOpcode = NO_OP;  // All done for the single byte opcodes. 
           }
