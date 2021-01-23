@@ -1189,6 +1189,10 @@ void loop()
           break;
 
           case READDIR:
+            // READ FAT DIR
+            // READDIR - Read the next directory entry for the FAT file path
+            //
+            // 
             ioOpcode = fatSystem.ReadNextDir(ioData);
           break;
           }

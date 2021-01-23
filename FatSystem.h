@@ -21,11 +21,14 @@ private:
     unsigned long size;
     byte attrib;
   };
+
+  void CopyFileInfo(File &file, FileInfo &info);
   
   File openFile;
   String filePath;
   byte ioCount;
   byte lastOpCode;
+  uint8_t dirCount;
   FileInfo fileInfo;
 };
 

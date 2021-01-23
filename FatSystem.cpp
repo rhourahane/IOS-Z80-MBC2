@@ -37,21 +37,33 @@ byte FatSystem::ReadNextDir(byte &ioByte)
   if (lastOpCode != READDIR)
   {
     memset(&fileInfo, 0, sizeof(fileInfo));
-    lastOpCode = READDIR;
-    if (openFile)
+    dirCount = 0;
+    ioCount = 0;
+  }
+
+  if (openFile && ioCount == 0)
+  {
+    File entry = openFile.openNextFile();
+    if (entry)
     {
-      File entry = openFile.openNextFile();
-      if (entry)
+      CopyFileInfo(entry, fileInfo);
+      ++dirCount;
+      ioCount = 0;
+      lastOpCode = READDIR;
+    }
+    else
+    {
+      if (dirCount == 0)
       {
-        strncpy(fileInfo.name, entry.name(), 12);
-        fileInfo.name[12] = '\0';
-        fileInfo.size = entry.size();
-        fileInfo.attrib = entry.isDirectory();
+        CopyFileInfo(openFile, fileInfo);
         ioCount = 0;
+        lastOpCode = READDIR;
+        ++dirCount;
       }
       else
       {
         lastOpCode = NO_OP;
+        ioByte = 0;
         return lastOpCode;
       }
     }
@@ -59,7 +71,20 @@ byte FatSystem::ReadNextDir(byte &ioByte)
 
   if (ioCount != sizeof(FileInfo))
   {
-    ioByte = ((byte*)&fileInfo)[ioCount];
+    ioByte = ((byte*)&fileInfo)[ioCount++];
+    if (ioCount == sizeof(FileInfo))
+    {
+      ioCount = 0;
+    }
   }
+
   return lastOpCode;
+}
+
+void FatSystem::CopyFileInfo(File &file, FileInfo &info)
+{
+  strncpy(info.name, file.name(), 12);
+  info.name[12] = '\0';
+  info.size = file.size();
+  info.attrib = file.isDirectory();
 }
