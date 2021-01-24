@@ -156,21 +156,20 @@ byte FatSystem::WriteFile(byte ioByte)
   if (lastOpCode != WRITEFILE)
   {
     ioCount = 0;
-    maxIoCount = ioByte;
+    maxIoCount = ioByte <= sizeof(ioBuffer) ? ioByte : sizeof(ioBuffer);
+    lastOpCode = WRITEFILE;
   }
   else
   {
-    ioByte = ioBuffer[ioCount++];
+    ioBuffer[ioCount++] = ioByte;
     if (ioCount == maxIoCount)
     {
-      Serial.printf(F("Finished buffering segment of %d\n\r"), maxIoCount);
       lastOpCode = NO_OP;
       if (openFile)
       {
         if (openFile.seek(segment << 7))
         {
           auto written = openFile.write(ioBuffer, maxIoCount);
-          Serial.printf(F("Written offset %d bytes written %d\n\r"), segment << 7, written);
           if (written != maxIoCount)
           {
             Serial.printf(F("Failed to write segment %d instead of %d\n\r"), written, maxIoCount);

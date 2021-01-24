@@ -891,7 +891,8 @@ void loop()
         if ((ioOpcode != 0x0A) &&
             (ioOpcode != 0x0C) &&
             (ioOpcode != SETPATH) &&
-            (ioOpcode != SETSEGMENT))
+            (ioOpcode != SETSEGMENT) &&
+            (ioOpcode != WRITEFILE))
         {
           ioOpcode = 0xFF;    // All done for the single byte opcodes. 
         }
