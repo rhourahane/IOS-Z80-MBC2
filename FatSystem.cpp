@@ -20,10 +20,6 @@ byte FatSystem::SetPath(byte ioByte)
     {
       openFile.close();
     }
-    if (filePath.length() > 0)
-    {
-      openFile = SD.open(filePath.c_str(), FILE_WRITE);
-    }
 
     lastOpCode = NO_OP;
   }
@@ -35,10 +31,42 @@ byte FatSystem::SetPath(byte ioByte)
   return lastOpCode;
 }
 
+byte FatSystem::SetSegment(byte ioByte)
+{
+  if (lastOpCode != SETSEGMENT)
+  {
+    ioCount = 1;
+    segment = ioByte;
+    lastOpCode = SETSEGMENT;
+  }
+  else
+  {
+    if (ioCount == 1)
+    {
+      segment += (uint16_t)ioByte << 8;
+      lastOpCode = NO_OP;
+    }
+  }
+
+  return lastOpCode;
+}
+
+byte FatSystem::FileExists(byte &ioByte)
+{
+  ioByte = SD.exists(filePath.c_str());
+
+  return NO_OP;
+}
+
 byte FatSystem::ReadNextDir(byte &ioByte)
 {
   if (lastOpCode != READDIR)
   {
+    if (filePath.length() > 0)
+    {
+      openFile = SD.open(filePath.c_str());
+    }
+    
     memset(&fileInfo, 0, sizeof(fileInfo));
     dirCount = 0;
     ioCount = 0;
@@ -89,31 +117,15 @@ byte FatSystem::ReadNextDir(byte &ioByte)
   return lastOpCode;
 }
 
-byte FatSystem::SetSegment(byte ioByte)
-{
-  if (lastOpCode != SETSEGMENT)
-  {
-    ioCount = 1;
-    segment = ioByte;
-    lastOpCode = SETSEGMENT;
-  }
-  else
-  {
-    if (ioCount == 1)
-    {
-      segment += (uint16_t)ioByte << 8;
-      lastOpCode = NO_OP;
-    }
-  }
-
-  return lastOpCode;
-}
-
 byte FatSystem::ReadFile(byte &ioByte)
 {
   if (lastOpCode != READFILE)
   {
     ioCount = 0;
+    if (filePath.length() > 0)
+    {
+      openFile = SD.open(filePath.c_str());
+    }
     if (openFile)
     {
       if (openFile.seek(segment << 7))
@@ -151,10 +163,28 @@ byte FatSystem::ReadFile(byte &ioByte)
   return lastOpCode;
 }
 
+byte FatSystem::DeleteFile(byte &ioByte)
+{
+  ioByte = SD.remove(filePath.c_str());
+  
+  return NO_OP;
+}
+
+byte FatSystem::MakeDir(byte &ioByte)
+{
+  ioByte = SD.mkdir(filePath.c_str());
+  
+  return NO_OP;
+}
+
 byte FatSystem::WriteFile(byte ioByte)
 {
   if (lastOpCode != WRITEFILE)
   {
+    if (filePath.length() > 0)
+    {
+      openFile = SD.open(filePath.c_str(), FILE_WRITE);
+    }
     ioCount = 0;
     maxIoCount = ioByte <= sizeof(ioBuffer) ? ioByte : sizeof(ioBuffer);
     lastOpCode = WRITEFILE;

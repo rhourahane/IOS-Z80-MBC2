@@ -12,10 +12,14 @@ public:
   FatSystem();
   
   byte SetPath(byte ioByte);
-  byte ReadNextDir(byte &ioByte);
-
   byte SetSegment(byte ioByte);
+
+  byte FileExists(byte &ioByte);
+  byte ReadNextDir(byte &ioByte);
   byte ReadFile(byte &ioByte);
+  byte DeleteFile(byte &ioByte);
+  byte MakeDir(byte &ioByte);
+
   byte WriteFile(byte ioByte);
   
 private:

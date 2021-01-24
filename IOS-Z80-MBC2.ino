@@ -1212,6 +1212,14 @@ void loop()
           case READFILE:
             ioOpcode = fatSystem.ReadFile(ioData);
           break;
+
+          case FILEEXISTS:
+            ioOpcode = fatSystem.FileExists(ioData);
+          break;
+
+          case MKDIR:
+            ioOpcode = fatSystem.MakeDir(ioData);
+          break;
           }
           if ((ioOpcode != 0x84) &&
               (ioOpcode != 0x86) &&

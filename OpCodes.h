@@ -31,6 +31,8 @@ enum OpCodes : byte
   SDMOUNT      = 0x87,
   READDIR      = 0x88,
   READFILE     = 0x89,
+  FILEEXISTS   = 0x8A,
+  MKDIR        = 0x8B,
       
   NO_OP        = 0xFF
 };
