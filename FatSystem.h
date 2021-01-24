@@ -16,6 +16,7 @@ public:
 
   byte SetSegment(byte ioByte);
   byte ReadFile(byte &ioByte);
+  byte WriteFile(byte ioByte);
   
 private:
   struct FileInfo

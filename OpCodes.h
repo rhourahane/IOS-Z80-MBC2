@@ -18,6 +18,7 @@ enum OpCodes : byte
   SETBANK      = 0x0D,
   SETPATH      = 0x0E,
   SETSEGMENT   = 0x0F,
+  WRITEFILE    = 0x10,
 
   // Read OpCodes start from 0x80
   USER_KEY     = 0x80,

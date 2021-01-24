@@ -882,7 +882,11 @@ void loop()
           // SETSEGMENT - Set the segment to be read.written from a FAT file each segment is 128 except for the last that
           //              might be less.
           ioOpcode = fatSystem.SetSegment(ioData);
-        break;            
+        break;
+
+        case WRITEFILE:
+          ioOpcode = fatSystem.WriteFile(ioData);
+        break;
         }
         if ((ioOpcode != 0x0A) &&
             (ioOpcode != 0x0C) &&

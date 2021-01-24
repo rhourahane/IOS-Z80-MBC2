@@ -16,7 +16,14 @@ byte FatSystem::SetPath(byte ioByte)
   
   if (ioByte == 0)
   {
-    openFile = SD.open(filePath.c_str());
+    if (openFile)
+    {
+      openFile.close();
+    }
+    if (filePath.length() > 0)
+    {
+      openFile = SD.open(filePath.c_str(), FILE_WRITE);
+    }
 
     lastOpCode = NO_OP;
   }
@@ -143,6 +150,47 @@ byte FatSystem::ReadFile(byte &ioByte)
 
   return lastOpCode;
 }
+
+byte FatSystem::WriteFile(byte ioByte)
+{
+  if (lastOpCode != WRITEFILE)
+  {
+    ioCount = 0;
+    maxIoCount = ioByte;
+  }
+  else
+  {
+    ioByte = ioBuffer[ioCount++];
+    if (ioCount == maxIoCount)
+    {
+      Serial.printf(F("Finished buffering segment of %d\n\r"), maxIoCount);
+      lastOpCode = NO_OP;
+      if (openFile)
+      {
+        if (openFile.seek(segment << 7))
+        {
+          auto written = openFile.write(ioBuffer, maxIoCount);
+          Serial.printf(F("Written offset %d bytes written %d\n\r"), segment << 7, written);
+          if (written != maxIoCount)
+          {
+            Serial.printf(F("Failed to write segment %d instead of %d\n\r"), written, maxIoCount);
+          }
+        }
+        else
+        {
+          Serial.printf(F("Failed to seek to %d\n\r"), segment << 7);
+        }
+      }
+      else
+      {
+        Serial.printf(F("File not open\n\r"));
+      }
+      lastOpCode = NO_OP;    }
+  }
+
+  return lastOpCode;
+}
+
 
 void FatSystem::CopyFileInfo(File &file, FileInfo &info)
 {
