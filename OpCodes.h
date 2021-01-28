@@ -19,6 +19,7 @@ enum OpCodes : byte
   SETPATH      = 0x0E,
   SETSEGMENT   = 0x0F,
   WRITEFILE    = 0x10,
+  I2CADDR      = 0x11,
 
   // Read OpCodes start from 0x80
   USER_KEY     = 0x80,
@@ -33,6 +34,7 @@ enum OpCodes : byte
   READFILE     = 0x89,
   FILEEXISTS   = 0x8A,
   MKDIR        = 0x8B,
+  I2CPROBE     = 0x8C,
       
   NO_OP        = 0xFF
 };

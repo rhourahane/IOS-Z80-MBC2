@@ -34,6 +34,7 @@ Notes:
 #include "DiskUtils.h"
 #include "Opcodes.h"
 #include "FatSystem.h"
+#include "GpioSubsys.h"
 
 #define HW_VERSION "A040618"
 #define SW_VERSION "RMH-OS-SD"
@@ -78,7 +79,10 @@ byte          diskErr         = 19;       // SELDISK, SELSECT, SELTRACK, WRITESE
                                           // error code
 byte          numWriBytes;                // Number of written bytes after a writeSD() call
 
+byte i2cAddr;
+
 FatSystem fatSystem;
+GpioSubsys gpioSubsys;
 
 // ------------------------------------------------------------------------------
 
@@ -520,85 +524,19 @@ void loop()
           
           Serial.write(ioData);
         break;
+        
+        case GPIOA_WRITE:
+        case GPIOB_WRITE:
+        case IODIRA_WRITE:
+        case IODIRB_WRITE:
+        case GPPUA_WRITE:
+        case GPPUB_WRITE:
+          if (moduleGPIO)
+          {
+            gpioSubsys.Write((OpCodes)ioOpcode, ioData);
+          }
+        break;
 
-        case  0x03:
-          // GPIOA Write (GPE Option):
-          //
-          //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                             D7 D6 D5 D4 D3 D2 D1 D0    GPIOA value (see MCP23017 datasheet)
-          
-          if (moduleGPIO) 
-          {
-            WriteRegisters(GPIOEXP_ADDR, GPIOA_REG, 1, &ioData);
-          }
-        break;
-        
-        case  0x04:
-          // GPIOB Write (GPE Option): 
-          //   
-          //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                             D7 D6 D5 D4 D3 D2 D1 D0    GPIOB value (see MCP23017 datasheet)
-          
-          if (moduleGPIO) 
-          {
-            WriteRegisters(GPIOEXP_ADDR, GPIOB_REG, 1, &ioData);
-          }
-        break;
-        
-        case  0x05:
-          // IODIRA Write (GPE Option):
-          //
-          //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                             D7 D6 D5 D4 D3 D2 D1 D0    IODIRA value (see MCP23017 datasheet)
-          
-          if (moduleGPIO) 
-          {
-            WriteRegisters(GPIOEXP_ADDR, IODIRA_REG, 1, &ioData);
-          }
-        break;
-        
-        case  0x06:
-          // IODIRB Write (GPE Option):
-          //
-          //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                             D7 D6 D5 D4 D3 D2 D1 D0    IODIRB value (see MCP23017 datasheet)
-          
-          if (moduleGPIO) 
-          {
-            WriteRegisters(GPIOEXP_ADDR, IODIRB_REG, 1, &ioData);
-          }
-        break;
-        
-        case  0x07:
-          // GPPUA Write (GPE Option):
-          //
-          //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                             D7 D6 D5 D4 D3 D2 D1 D0    GPPUA value (see MCP23017 datasheet)
-          
-          if (moduleGPIO) 
-          {
-            WriteRegisters(GPIOEXP_ADDR, GPPUA_REG, 1, &ioData);
-          }
-        break;
-        
-        case  0x08:
-          // GPPUB Write (GPIO Exp. Mod. ):
-          //
-          //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                             D7 D6 D5 D4 D3 D2 D1 D0    GPPUB value (see MCP23017 datasheet)
-          
-          if (moduleGPIO) 
-          {
-            WriteRegisters(GPIOEXP_ADDR, GPPUB_REG, 1, &ioData);
-          }
-        break;
-        
         case  0x09:
           // DISK EMULATION
           // SELDISK - select the emulated disk number (binary). 100 disks are supported [0..99]:
@@ -887,6 +825,10 @@ void loop()
         case WRITEFILE:
           ioOpcode = fatSystem.WriteFile(ioData);
         break;
+
+        case I2CADDR:
+          i2cAddr = ioData;
+        break;
         }
         if ((ioOpcode != 0x0A) &&
             (ioOpcode != 0x0C) &&
@@ -976,47 +918,11 @@ void loop()
             digitalWrite(USER, tempByte);         // Restore USER led status
           break;
 
-          case  0x81:
-            // GPIOA Read (GPE Option):
-            //
-            //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-            //                            ---------------------------------------------------------
-            //                             D7 D6 D5 D4 D3 D2 D1 D0    GPIOA value (see MCP23017 datasheet)
-            //
-            // NOTE: a value 0x00 is forced if the GPE Option is not present
-            
-            if (moduleGPIO) 
+          case GPIOA_READ:
+          case GPIOB_READ:
+            if (moduleGPIO)
             {
-              // Set MCP23017 pointer to GPIOA
-              Wire.beginTransmission(GPIOEXP_ADDR);
-              Wire.write(GPIOA_REG);
-              Wire.endTransmission();
-              // Read GPIOA
-              Wire.beginTransmission(GPIOEXP_ADDR);
-              Wire.requestFrom(GPIOEXP_ADDR, 1);
-              ioData = Wire.read();
-            }
-          break;
-
-          case  0x82:
-            // GPIOB Read (GPE Option):
-            //
-            //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-            //                            ---------------------------------------------------------
-            //                             D7 D6 D5 D4 D3 D2 D1 D0    GPIOB value (see MCP23017 datasheet)
-            //
-            // NOTE: a value 0x00 is forced if the GPE Option is not present
-            
-            if (moduleGPIO) 
-            {
-              // Set MCP23017 pointer to GPIOB
-              Wire.beginTransmission(GPIOEXP_ADDR);
-              Wire.write(GPIOB_REG);
-              Wire.endTransmission();
-              // Read GPIOB
-              Wire.beginTransmission(GPIOEXP_ADDR);
-              Wire.requestFrom(GPIOEXP_ADDR, 1);
-              ioData = Wire.read();
+              gpioSubsys.Read((OpCodes)ioOpcode, ioData);
             }
           break;
 
@@ -1220,6 +1126,10 @@ void loop()
           case MKDIR:
             ioOpcode = fatSystem.MakeDir(ioData);
           break;
+
+          case I2CPROBE:
+            ioData = ProbeAddress(i2cAddr);
+           break;
           }
           if ((ioOpcode != 0x84) &&
               (ioOpcode != 0x86) &&
