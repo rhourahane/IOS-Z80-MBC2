@@ -1,12 +1,27 @@
 #include <Arduino.h>
 
-#include "FatSystem.h"
+#include "FatSubsys.h"
 
 FatSystem::FatSystem() : ioCount(0), lastOpCode(NO_OP)
 {
 }
 
-byte FatSystem::SetPath(byte ioByte)
+Opcodes FatSystem::Read(Opcodes opcode, byte &ioByte)
+{
+  
+}
+
+Opcodes FatSystem::Write(Opcodes opcode, byte ioByte)
+{
+  
+}
+
+void FatSystem::Reset(Opcodes opcode)
+{
+  
+}
+  
+Opcodes FatSystem::SetPath(byte ioByte)
 {
   if (lastOpCode != SETPATH)
   {
@@ -31,7 +46,7 @@ byte FatSystem::SetPath(byte ioByte)
   return lastOpCode;
 }
 
-byte FatSystem::SetSegment(byte ioByte)
+Opcodes FatSystem::SetSegment(byte ioByte)
 {
   if (lastOpCode != SETSEGMENT)
   {
@@ -51,14 +66,14 @@ byte FatSystem::SetSegment(byte ioByte)
   return lastOpCode;
 }
 
-byte FatSystem::FileExists(byte &ioByte)
+Opcodes FatSystem::FileExists(byte &ioByte)
 {
   ioByte = SD.exists(filePath.c_str());
 
   return NO_OP;
 }
 
-byte FatSystem::ReadNextDir(byte &ioByte)
+Opcodes FatSystem::ReadNextDir(byte &ioByte)
 {
   if (lastOpCode != READDIR)
   {
@@ -117,7 +132,7 @@ byte FatSystem::ReadNextDir(byte &ioByte)
   return lastOpCode;
 }
 
-byte FatSystem::ReadFile(byte &ioByte)
+Opcodes FatSystem::ReadFile(byte &ioByte)
 {
   if (lastOpCode != READFILE)
   {
@@ -163,21 +178,21 @@ byte FatSystem::ReadFile(byte &ioByte)
   return lastOpCode;
 }
 
-byte FatSystem::DeleteFile(byte &ioByte)
+Opcodes FatSystem::DeleteFile(byte &ioByte)
 {
   ioByte = SD.remove(filePath.c_str());
   
   return NO_OP;
 }
 
-byte FatSystem::MakeDir(byte &ioByte)
+Opcodes FatSystem::MakeDir(byte &ioByte)
 {
   ioByte = SD.mkdir(filePath.c_str());
   
   return NO_OP;
 }
 
-byte FatSystem::WriteFile(byte ioByte)
+Opcodes FatSystem::WriteFile(byte ioByte)
 {
   if (lastOpCode != WRITEFILE)
   {

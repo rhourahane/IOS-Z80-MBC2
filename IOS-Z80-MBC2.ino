@@ -33,8 +33,9 @@ Notes:
 #include "WireUtils.h"
 #include "DiskUtils.h"
 #include "Opcodes.h"
-#include "FatSystem.h"
+#include "FatSubsys.h"
 #include "GpioSubsys.h"
+#include "UserSubsys.h"
 
 #define HW_VERSION "A040618"
 #define SW_VERSION "RMH-OS-SD"
@@ -83,6 +84,7 @@ byte i2cAddr;
 
 FatSystem fatSystem;
 GpioSubsys gpioSubsys;
+UserSubsys userSubsys;
 
 // ------------------------------------------------------------------------------
 
@@ -505,16 +507,14 @@ void loop()
         switch (ioOpcode)
         // Execute the requested I/O WRITE Opcode. The 0xFF value is reserved as "No operation".
         {
-          case  0x00:
+        case  USER_LED:
           // USER LED:      
           //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
           //                            ---------------------------------------------------------
           //                              x  x  x  x  x  x  x  0    USER Led off
           //                              x  x  x  x  x  x  x  1    USER Led on
-          
-          if (ioData & B00000001) digitalWrite(USER, LOW); 
-          else digitalWrite(USER, HIGH);
-        break;
+          ioOpcode = userSubsys.Write((Opcodes)ioOpcode, ioData);
+         break;
 
         case  0x01:
           // SERIAL TX:     
@@ -533,7 +533,7 @@ void loop()
         case GPPUB_WRITE:
           if (moduleGPIO)
           {
-            gpioSubsys.Write((OpCodes)ioOpcode, ioData);
+            gpioSubsys.Write((Opcodes)ioOpcode, ioData);
           }
         break;
 
@@ -904,25 +904,20 @@ void loop()
           switch (ioOpcode)
           // Execute the requested I/O READ Opcode. The 0xFF value is reserved as "No operation".
           {
-            case  0x80:
+            case USER_KEY:
             // USER KEY:      
             //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
             //                            ---------------------------------------------------------
             //                              0  0  0  0  0  0  0  0    USER Key not pressed
             //                              0  0  0  0  0  0  0  1    USER Key pressed
-            
-            tempByte = digitalRead(USER);         // Save USER led status
-            pinMode(USER, INPUT_PULLUP);          // Read USER Key
-            ioData = !digitalRead(USER);
-            pinMode(USER, OUTPUT); 
-            digitalWrite(USER, tempByte);         // Restore USER led status
+            ioOpcode = userSubsys.Read((Opcodes)ioOpcode, ioData);
           break;
 
           case GPIOA_READ:
           case GPIOB_READ:
             if (moduleGPIO)
             {
-              gpioSubsys.Read((OpCodes)ioOpcode, ioData);
+              gpioSubsys.Read((Opcodes)ioOpcode, ioData);
             }
           break;
 

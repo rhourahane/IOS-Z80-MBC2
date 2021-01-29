@@ -19,9 +19,7 @@ byte BootMenu(byte bootMode, byte maxDiskSet, byte foundRTC, ConfigOptions &opti
   do
   {
     FlushRxBuffer();
-    Serial.println();
-    Serial.println(F("IOS: Select boot mode or system parameters:"));
-    Serial.println();
+    Serial.println(F("\n\rIOS: Select boot mode or system parameters:\n\r"));
     if (bootMode <= maxBootMode)
     // Previous valid boot mode read, so enable '0' selection
     {

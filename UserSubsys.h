@@ -1,8 +1,8 @@
-#if !defined(_GPIOSUBSYS_H_)
-#define _GPIOSUBSYS_H_
+#if !defined(_USERSUBSYS_H_)
+#define _USERSUBSYS_H_
 #include "BaseSubsys.h"
 
-class GpioSubsys : public BaseSubsys
+class UserSubsys : public BaseSubsys
 {
 public:
   Opcodes Read(Opcodes opcode, byte &ioByte);

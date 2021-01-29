@@ -1,6 +1,6 @@
 #if !defined(_OP_CODES_H_)
 #define _OP_CODES_H_
-enum OpCodes : byte
+enum Opcodes : byte
 {
   // Write OpCodes start from 0x00
   USER_LED     = 0x00,
