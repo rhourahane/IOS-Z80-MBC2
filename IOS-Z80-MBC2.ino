@@ -36,6 +36,7 @@ Notes:
 #include "FatSubsys.h"
 #include "GpioSubsys.h"
 #include "UserSubsys.h"
+#include "WireSubsys.h"
 
 #define HW_VERSION "A040618"
 #define SW_VERSION "RMH-OS-SD"
@@ -80,11 +81,10 @@ byte          diskErr         = 19;       // SELDISK, SELSECT, SELTRACK, WRITESE
                                           // error code
 byte          numWriBytes;                // Number of written bytes after a writeSD() call
 
-byte i2cAddr;
-
 FatSystem fatSystem;
 GpioSubsys gpioSubsys;
 UserSubsys userSubsys;
+WireSubsys wireSubsys;
 
 // ------------------------------------------------------------------------------
 
@@ -827,18 +827,20 @@ void loop()
         break;
 
         case I2CADDR:
-          i2cAddr = ioData;
+        case I2CWRITE:
+          ioOpcode = wireSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
         }
         if ((ioOpcode != 0x0A) &&
             (ioOpcode != 0x0C) &&
             (ioOpcode != SETPATH) &&
             (ioOpcode != SETSEGMENT) &&
-            (ioOpcode != WRITEFILE))
+            (ioOpcode != WRITEFILE) &&
+            (ioOpcode != I2CADDR) &&
+            (ioOpcode != I2CWRITE))
         {
           ioOpcode = 0xFF;    // All done for the single byte opcodes. 
         }
-                                                                          //  Set ioOpcode = "No operation"
       }
       
       // Control bus sequence to exit from a wait state (M I/O write cycle)
@@ -1123,13 +1125,15 @@ void loop()
           break;
 
           case I2CPROBE:
-            ioData = ProbeAddress(i2cAddr);
+          case I2CREAD:
+            ioOpcode = wireSubsys.Read((Opcodes)ioOpcode, ioData);
            break;
           }
           if ((ioOpcode != 0x84) &&
               (ioOpcode != 0x86) &&
               (ioOpcode != READDIR) &&
-              (ioOpcode != READFILE))
+              (ioOpcode != READFILE) &&
+              (ioOpcode != I2CREAD))
           {
             ioOpcode = NO_OP;  // All done for the single byte opcodes. 
           }
