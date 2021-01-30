@@ -20,7 +20,6 @@ private:
   uint8_t addr;
   uint8_t regAddr;
   uint8_t transfer;
-  byte buffer[128];
 };
 
 #endif

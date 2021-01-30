@@ -73,26 +73,21 @@ Opcodes WireSubsys::DoRead(byte &ioByte)
 {
   if (lastOpcode != I2CREAD)
   {
-    Serial.printf(F("Reading %d bytes @ %d\n\r"), transfer, addr);
     lastOpcode = I2CREAD;
     ioCount = 0;
     Wire.requestFrom(addr, transfer);
-    while (Wire.available())
-    {
-      byte rdByte = Wire.read();
-      buffer[ioCount++] = rdByte;
-      Serial.printf(F("Read %d from %d\n\r"), rdByte, addr);
-      if (ioCount == transfer)
-      {
-        break;
-      }
-    }
-
-    ioCount = 0;
   }
 
-  ioByte = buffer[ioCount++];
-  if (ioCount == transfer)
+  if (Wire.available())
+  {
+    ioByte = Wire.read();
+    ++ioCount;
+    if (ioCount == transfer)
+    {
+      lastOpcode = NO_OP;
+    }
+  }
+  else
   {
     lastOpcode = NO_OP;
   }
@@ -106,17 +101,18 @@ Opcodes WireSubsys::DoWrite(byte ioByte)
   {
     ioCount = 0;
     lastOpcode = I2CWRITE;
+    Wire.beginTransmission(addr);
   }
 
-  Serial.printf(F("Written %d to %d\n\r"), ioByte, addr);
-  buffer[++ioCount] = ioByte;
+  Wire.write(ioByte);
+  ++ioCount;
   if (ioCount == transfer)
   {
-    Serial.printf(F("Writing %d bytes @ %d\n\r"), transfer, addr);
-    Wire.beginTransmission(addr);
-    Wire.write(buffer, ioCount);
     byte result = Wire.endTransmission();
-    Serial.printf(F("EndTransmission %d after %d bytes\n\r"), result, ioCount);
+    if (result != 0)
+    {
+      Serial.printf(F("EndTransmission failed with %d\n\r"), result);
+    }
     lastOpcode = NO_OP;  
   }
 
