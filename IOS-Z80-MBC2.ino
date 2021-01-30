@@ -39,7 +39,7 @@ Notes:
 #include "WireSubsys.h"
 
 #define HW_VERSION "A040618"
-#define SW_VERSION "RMH-OS-SD"
+#define SW_VERSION "RMH-OS-MORE"
 
 
 // ------------------------------------------------------------------------------
