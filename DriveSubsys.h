@@ -12,6 +12,8 @@ public:
   void Reset(Opcodes opcode);
 
   const byte MaxDiskNo = 99;
+  void DiskSet(byte diskNo);
+  byte DiskSet();
 
 private:
   Opcodes SelDisk(byte ioByte);
@@ -22,9 +24,6 @@ private:
   Opcodes ErrDisk(byte &ioByte);
   Opcodes ReadSect(byte &ioByte);
 
-  void DiskSet(byte diskNo);
-  byte DiskSet();
-  
 private:
   byte diskSet;
   char diskName[11];  // String used for virtual disk file name

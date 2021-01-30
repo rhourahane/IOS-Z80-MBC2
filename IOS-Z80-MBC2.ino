@@ -37,6 +37,7 @@ Notes:
 #include "GpioSubsys.h"
 #include "UserSubsys.h"
 #include "WireSubsys.h"
+#include "DriveSubsys.h"
 
 #define HW_VERSION "A040618"
 #define SW_VERSION "RMH-OS-MORE"
@@ -85,6 +86,7 @@ FatSystem fatSystem;
 GpioSubsys gpioSubsys;
 UserSubsys userSubsys;
 WireSubsys wireSubsys;
+DriveSubsys driveSubsys;
 
 // ------------------------------------------------------------------------------
 
@@ -278,6 +280,7 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
     break;
   }
   digitalWrite(WAIT_RES_, HIGH);                  // Set WAIT_RES_ HIGH (Led LED_0 ON)
+  driveSubsys.DiskSet(SystemOptions.DiskSet);
   
   // Load a JP instruction if the boot program starting addr is > 0x0000
   if (BootStrAddr > 0x0000)                       // Check if the boot program starting addr > 0x0000
@@ -537,7 +540,7 @@ void loop()
           }
         break;
 
-        case  0x09:
+        case  SELDISK:
           // DISK EMULATION
           // SELDISK - select the emulated disk number (binary). 100 disks are supported [0..99]:
           //
@@ -570,19 +573,10 @@ void loop()
           //         a maximum of 16 disks)
           // NOTE 2: Because SELDISK opens the "disk file" used for disk emulation, before using WRITESECT or READSECT
           //         a SELDISK must be performed at first.
-
-          if (ioData <= maxDiskNum)               // Valid disk number
-          // Set the name of the file to open as virtual disk, and open it
-          {
-            diskName[2] = SystemOptions.DiskSet + 48;           // Set the current Disk Set
-            diskName[4] = (ioData / 10) + 48;     // Set the disk number
-            diskName[5] = ioData - ((ioData / 10) * 10) + 48;
-            diskErr = openSD(diskName);           // Open the "disk file" corresponding to the given disk number
-          }
-          else diskErr = BAD_DISK_NO;             // Illegal disk number
+          ioOpcode = driveSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
 
-        case  0x0A:
+        case  SELTRACK:
           // DISK EMULATION
           // SELTRACK - select the emulated track number (word splitted in 2 bytes in sequence: DATA 0 and DATA 1):
           //
@@ -606,36 +600,10 @@ void loop()
           // NOTE 1: Allowed track numbers are in the range [0..511] (512 tracks)
           // NOTE 2: Before a WRITESECT or READSECT operation at least a SELSECT or a SELTRAK operation
           //         must be performed
-
-          if (!ioByteCnt)
-          // LSB
-          {
-            trackSel = ioData;
-          }
-          else
-          // MSB
-          {
-            trackSel = (((word) ioData) << 8) | lowByte(trackSel);
-            if ((trackSel < TRACK_COUNT) && (sectSel < SECTOR_COUNT))
-            // Sector and track numbers valid
-            {
-              diskErr = NO_ERROR;             // No errors
-            }
-            else
-            // Sector or track invalid number
-            {
-              if (sectSel < SECTOR_COUNT)
-              {
-                diskErr = BAD_TRACK_NO;       // Illegal track number
-              }
-              else diskErr = BAD_SECTOR_NO;   // Illegal sector number
-            }
-            ioOpcode = 0xFF;                  // All done. Set ioOpcode = "No operation"
-          }
-          ioByteCnt++;
+          ioOpcode = driveSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
 
-        case  0x0B:
+        case  SELSECT:
           // DISK EMULATION
           // SELSECT - select the emulated sector number (binary):
           //
@@ -655,25 +623,10 @@ void loop()
           // NOTE 1: Allowed sector numbers are in the range [0..31] (32 sectors)
           // NOTE 2: Before a WRITESECT or READSECT operation at least a SELSECT or a SELTRAK operation
           //         must be performed
-
-          sectSel = ioData;
-          if ((trackSel < TRACK_COUNT) && (sectSel < SECTOR_COUNT))
-          // Sector and track numbers valid
-          {
-            diskErr = NO_ERROR;                 // No errors
-          }
-          else
-          // Sector or track invalid number
-          {
-            if (sectSel < SECTOR_COUNT)
-            {
-              diskErr = BAD_TRACK_NO;           // Illegal track number
-            }
-            else diskErr = BAD_SECTOR_NO;       // Illegal sector number
-          }
+          ioOpcode = driveSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
 
-        case  0x0C:
+        case  WRITESECT:
           // DISK EMULATION
           // WRITESECT - write 512 data bytes sequentially into the current emulated disk/track/sector:
           //
@@ -703,42 +656,7 @@ void loop()
           // NOTE 2: Remember to open the right "disk file" at first using the SELDISK opcode
           // NOTE 3: The write finalization on SD "disk file" is executed only on the 512th data byte exchange, so be 
           //         sure that exactly 512 data bytes are exchanged.
-
-          if (!ioByteCnt)
-          // First byte of 512, so set the right file pointer to the current emulated track/sector first
-          {
-            if ((trackSel < 512) && (sectSel < 32) && (!diskErr))
-            // Sector and track numbers valid and no previous error; set the LBA-like logical sector
-            {
-            diskErr = seekSD((trackSel << 5) | sectSel);  // Set the starting point inside the "disk file"
-                                                          //  generating a 14 bit "disk file" LBA-like 
-                                                          //  logical sector address created as TTTTTTTTTSSSSS
-            }
-          }
-          
-
-          if (!diskErr)
-          // No previous error (e.g. selecting disk, track or sector)
-          {
-            tempByte = ioByteCnt % SEGMENT_SIZE;            // [0..SEGMENT_SIZE]
-            bufferSD[tempByte] = ioData;          // Store current exchanged data byte in the buffer array
-            if (tempByte == (SEGMENT_SIZE - 1))
-            // Buffer full. Write all the buffer content (SEGMENT_SIZE bytes) into the "disk file"
-            {
-              diskErr = writeSD(bufferSD, &numWriBytes);
-              if (numWriBytes < SEGMENT_SIZE)
-      			  {
-      				  diskErr = UNEXPECTED_EOF; // Reached an unexpected EOF
-      			  }
-              if (ioByteCnt >= (BLOCK_SIZE - 1))
-              // Finalize write operation and check result (if no previous error occurred)
-              {
-                if (!diskErr) diskErr = writeSD(NULL, &numWriBytes);
-                ioOpcode = 0xFF;                  // All done. Set ioOpcode = "No operation"
-              }
-            }
-          }
-          ioByteCnt++;                            // Increment the counter of the exchanged data bytes
+          ioOpcode = driveSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
 
         case  0x0D:
@@ -937,7 +855,6 @@ void loop()
             //                              X  X  X  X  1  X  X  X    Previous RX char was a "buffer empty" flag
             //
             // NOTE: Currently only D0-D3 are used
-
             ioData = SystemOptions.AutoexecFlag | (foundRTC << 1) | ((Serial.available() > 0) << 2) | ((LastRxIsEmpty > 0) << 3);
           break;
 
@@ -980,7 +897,7 @@ void loop()
             else ioOpcode = 0xFF;                 // Nothing to do. Set ioOpcode = "No operation"
           break;
 
-          case  0x85:
+          case  ERRDISK:
             // DISK EMULATION
             // ERRDISK - read the error code after a SELDISK, SELSECT, SELTRACK, WRITESECT, READSECT 
             //           or SDMOUNT operation
@@ -1016,11 +933,10 @@ void loop()
             // NOTE 2: Error codes from 0 to 6 come from the PetitFS library implementation
             // NOTE 3: ERRDISK must not be used to read the resulting error code after a SDMOUNT operation 
             //         (see the SDMOUNT opcode)
-             
-            ioData = diskErr;
+            ioOpcode = driveSubsys.Read((Opcodes)ioOpcode, ioData);
           break;
 
-          case  0x86:
+          case  READSECT:
             // DISK EMULATION
             // READSECT - read 512 data bytes sequentially from the current emulated disk/track/sector:
             //
@@ -1047,46 +963,10 @@ void loop()
             //
             // NOTE 1: Before a READSECT operation at least a SELTRACK or a SELSECT must be always performed
             // NOTE 2: Remember to open the right "disk file" at first using the SELDISK opcode
-
-            if (!ioByteCnt)
-            // First byte of 512, so set the right file pointer to the current emulated track/sector first
-            {
-              if ((trackSel < 512) && (sectSel < 32) && (!diskErr))
-              // Sector and track numbers valid and no previous error; set the LBA-like logical sector
-              {
-              diskErr = seekSD((trackSel << 5) | sectSel);  // Set the starting point inside the "disk file"
-                                                            //  generating a 14 bit "disk file" LBA-like 
-                                                            //  logical sector address created as TTTTTTTTTSSSSS
-              }
-            }
-
-            
-            if (!diskErr)
-            // No previous error (e.g. selecting disk, track or sector)
-            {
-              tempByte = ioByteCnt % SEGMENT_SIZE;          // [0..SEGMENT_SIZE -1]
-              if (!tempByte)
-              // Read SEGMENT_SIZE bytes of the current sector on SD in the buffer (every 32 calls, starting with the first)
-              {
-                diskErr = readSD(bufferSD, &numReadBytes); 
-                if (numReadBytes < SEGMENT_SIZE)
-            		{
-            		  diskErr = 19;    // Reached an unexpected EOF
-            		}
-              }
-              if (!diskErr)
-              {
-                ioData = bufferSD[tempByte];// If no errors, exchange current data byte with the CPU
-              }
-            }
-            if (ioByteCnt >= (BLOCK_SIZE - 1)) 
-            {
-              ioOpcode = 0xFF;                    // All done. Set ioOpcode = "No operation"
-            }
-            ioByteCnt++;                          // Increment the counter of the exchanged data bytes
+            ioOpcode = driveSubsys.Read((Opcodes)ioOpcode, ioData);
           break;
 
-          case  0x87:
+          case  SDMOUNT:
             // DISK EMULATION
             // SDMOUNT - mount a volume on SD, returning an error code (binary):
             //
