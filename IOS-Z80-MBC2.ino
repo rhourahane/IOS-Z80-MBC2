@@ -664,26 +664,8 @@ void loop()
 
           case  ERRDISK:
           case  READSECT:
-            ioOpcode = driveSubsys.Read((Opcodes)ioOpcode, ioData);
-          break;
-
           case  SDMOUNT:
-            // DISK EMULATION
-            // SDMOUNT - mount a volume on SD, returning an error code (binary):
-            //
-            //                 I/O DATA 0: D7 D6 D5 D4 D3 D2 D1 D0
-            //                            ---------------------------------------------------------
-            //                             D7 D6 D5 D4 D3 D2 D1 D0    error code (binary)
-            //
-            //
-            //
-            // NOTE 1: This opcode is "normally" not used. Only needed if using a virtual disk from a custom program
-            //         loaded with iLoad or with the Autoboot mode (e.g. ViDiT). Can be used to handle SD hot-swapping
-            // NOTE 2: For error codes explanation see ERRDISK opcode
-            // NOTE 3: Only for this disk opcode, the resulting error is read as a data byte without using the 
-            //         ERRDISK opcode
-            ioData = mountSD();
-            ioOpcode = NO_OP;
+            ioOpcode = driveSubsys.Read((Opcodes)ioOpcode, ioData);
           break;
 
           case READDIR:
