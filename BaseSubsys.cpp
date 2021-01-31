@@ -1,6 +1,9 @@
 #include "BaseSubsys.h"
 
-BaseSubsys::BaseSubsys() : ioCount(0), lastOpcode(NO_OP)
+BaseSubsys::BaseSubsys()
 {
-  
 }
+
+Opcodes BaseSubsys::lastOpcode = NO_OP;
+int BaseSubsys::ioCount = 0;
+ 

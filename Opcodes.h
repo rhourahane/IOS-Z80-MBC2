@@ -181,7 +181,6 @@ enum Opcodes : byte
   //
   // NOTE: If the Os Bank number is greater than 2 no selection is done.
   SETBANK = 0x0D,
-  
 
   // Set the path used for FAT file system operations
   // I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
@@ -192,7 +191,14 @@ enum Opcodes : byte
   // Note: The path string is terminated by a '\0' char and directories separated by '/'.
   SETPATH      = 0x0E,
   
+  // Set segment number to be read/written from the FAT file
+  // I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
+  // ---------------------------------------------------------
+  // I/O DATA 0   D7 D6 D5 D4 D3 D2 D1 D0    LSB
+  // I/O DATA 1   D7 D6 D5 D4 D3 D2 D1 D0    MSB
+  // Note: Each seqment is 128 bytes long except the last one which can be any size.
   SETSEGMENT   = 0x0F,
+  
   WRITEFILE    = 0x10,
 
   // Set the address and number of bytes for I2C reads and writes

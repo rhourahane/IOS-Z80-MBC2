@@ -13,8 +13,8 @@ public:
   virtual void Reset(Opcodes opcode) = 0;
 
 protected:
-  Opcodes lastOpcode;
-  int ioCount;
+  static Opcodes lastOpcode;
+  static int ioCount;
 };
 
 #endif

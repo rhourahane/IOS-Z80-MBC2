@@ -38,6 +38,8 @@ Notes:
 #include "UserSubsys.h"
 #include "WireSubsys.h"
 #include "DriveSubsys.h"
+#include "BankSubsys.h"
+#include "RtcSubsys.h"
 
 #define HW_VERSION "A040618"
 #define SW_VERSION "RMH-OS-MORE"
@@ -77,6 +79,8 @@ GpioSubsys gpioSubsys;
 UserSubsys userSubsys;
 WireSubsys wireSubsys;
 DriveSubsys driveSubsys;
+BankSubsys bankSubsys;
+RtcSubsys rtcSubsys;
 
 // ------------------------------------------------------------------------------
 
@@ -176,6 +180,7 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
 
   // Print RTC and GPIO informations if found
   foundRTC = autoSetRTC();                        // Check if RTC is present and initialize it as needed
+  rtcSubsys.foundRtc(foundRTC);
   if (moduleGPIO)
   {
     Serial.println(F("IOS: Found GPE Option"));
@@ -463,7 +468,7 @@ void loop()
       // Opcode 0x0B  SELSECT         1  
       // Opcode 0x0C  WRITESECT       512
       // Opcode 0x0D  SETBANK         1
-      // Opcode 0x0E  SETPATH         12
+      // Opcode 0x0E  SETPATH         Variable
       // Opcode 0xFF  No operation    1
       //
       //
@@ -502,21 +507,17 @@ void loop()
         // Execute the requested I/O WRITE Opcode. The 0xFF value is reserved as "No operation".
         {
         case  USER_LED:
-          // USER LED:      
-          //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                              x  x  x  x  x  x  x  0    USER Led off
-          //                              x  x  x  x  x  x  x  1    USER Led on
           ioOpcode = userSubsys.Write((Opcodes)ioOpcode, ioData);
          break;
 
-        case  0x01:
+        case  SERIAL_TX:
           // SERIAL TX:     
           //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
           //                            ---------------------------------------------------------
           //                             D7 D6 D5 D4 D3 D2 D1 D0    ASCII char to be sent to serial
           
           Serial.write(ioData);
+          ioOpcode = NO_OP;
         break;
         
         case GPIOA_WRITE:
@@ -538,76 +539,10 @@ void loop()
           ioOpcode = driveSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
 
-        case  0x0D:
-          // BANKED RAM
-          // SETBANK - select the Os RAM Bank (binary):
-          //
-          //                  I/O DATA:  D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                             D7 D6 D5 D4 D3 D2 D1 D0    Os Bank number (binary) [0..2]
-          //
-          //
-          // Set a 32kB RAM bank for the lower half of the Z80 address space (from 0x0000 to 0x7FFF).
-          // The upper half (from 0x8000 to 0xFFFF) is the common fixed bank.
-          // Allowed Os Bank numbers are from 0 to 2.
-          //
-          // Please note that there are three kinds of Bank numbers (see the A040618 schematic):
-          //
-          // * the "Os Bank" number is the bank number managed (known) by the Os;
-          // * the "Logical Bank" number is the bank seen by the Atmega32a (through BANK1 and BANK0 address lines);
-          // * the "Physical Bank" number is the real bank addressed inside the RAM chip (RAM_A16 and RAM_A15 RAM 
-          //   address lines).
-          //
-          // The following tables shows the relations:
-          //
-          //
-          //  Os Bank | Logical Bank |  Z80 Address Bus    |   Physical Bank   |            Notes
-          //  number  | BANK1 BANK0  |        A15          |  RAM_A16 RAM_A15  |
-          // ------------------------------------------------------------------------------------------------
-          //     X    |   X     X    |         1           |     0       1     |  Phy Bank 1 (common fixed)
-          //     -    |   0     0    |         0           |     0       1     |  Phy Bank 1 (common fixed)
-          //     0    |   0     1    |         0           |     0       0     |  Phy Bank 0 (Logical Bank 1)
-          //     2    |   1     0    |         0           |     1       1     |  Phy Bank 3 (Logical Bank 2)
-          //     1    |   1     1    |         0           |     1       0     |  Phy Bank 2 (Logical Bank 3)
-          //
-          //
-          //
-          //      Physical Bank      |    Logical Bank     |   Physical Bank   |   Physical RAM Addresses
-          //          number         |       number        |  RAM_A16 RAM_A15  |
-          // ------------------------------------------------------------------------------------------------
-          //            0            |         1           |     0       0     |   From 0x00000 to 0x07FFF 
-          //            1            |         0           |     0       1     |   From 0x08000 to 0x0FFFF
-          //            2            |         3           |     1       0     |   From 0x01000 to 0x17FFF
-          //            3            |         2           |     1       1     |   From 0x18000 to 0x1FFFF
-          //
-          //
-          // Note that the Logical Bank 0 can't be used as switchable Os Bank bacause it is the common 
-          //  fixed bank mapped in the upper half of the Z80 address space (from 0x8000 to 0xFFFF).
-          //
-          //
-          // NOTE: If the Os Bank number is greater than 2 no selection is done.
-
-          switch (ioData)
-          {
-            case 0:                               // Os bank 0
-              // Set physical bank 0 (logical bank 1)
-              digitalWrite(BANK0, HIGH);
-              digitalWrite(BANK1, LOW);
-            break;
-
-            case 1:                               // Os bank 1
-              // Set physical bank 2 (logical bank 3)
-              digitalWrite(BANK0, HIGH);
-              digitalWrite(BANK1, HIGH);
-            break;  
-
-            case 2:                               // Os bank 2
-              // Set physical bank 3 (logical bank 2)
-              digitalWrite(BANK0, LOW);
-              digitalWrite(BANK1, HIGH);
-            break;  
-          }
+        case  SETBANK:
+          ioOpcode = bankSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
+        
         case SETPATH:
           ioOpcode = fatSystem.SetPath(ioData);
         break;
@@ -627,16 +562,6 @@ void loop()
         case I2CWRITE:
           ioOpcode = wireSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
-        }
-        if ((ioOpcode != 0x0A) &&
-            (ioOpcode != 0x0C) &&
-            (ioOpcode != SETPATH) &&
-            (ioOpcode != SETSEGMENT) &&
-            (ioOpcode != WRITEFILE) &&
-            (ioOpcode != I2CADDR) &&
-            (ioOpcode != I2CWRITE))
-        {
-          ioOpcode = 0xFF;    // All done for the single byte opcodes. 
         }
       }
       
@@ -704,11 +629,6 @@ void loop()
           // Execute the requested I/O READ Opcode. The 0xFF value is reserved as "No operation".
           {
             case USER_KEY:
-            // USER KEY:      
-            //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-            //                            ---------------------------------------------------------
-            //                              0  0  0  0  0  0  0  0    USER Key not pressed
-            //                              0  0  0  0  0  0  0  1    USER Key pressed
             ioOpcode = userSubsys.Read((Opcodes)ioOpcode, ioData);
           break;
 
@@ -720,7 +640,7 @@ void loop()
             }
           break;
 
-          case  0x83:
+          case  SYSFLAGS:
             // SYSFLAGS (Various system flags for the OS):
             //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
             //                            ---------------------------------------------------------
@@ -735,45 +655,11 @@ void loop()
             //
             // NOTE: Currently only D0-D3 are used
             ioData = SystemOptions.AutoexecFlag | (foundRTC << 1) | ((Serial.available() > 0) << 2) | ((LastRxIsEmpty > 0) << 3);
+            ioOpcode = NO_OP;
           break;
 
-          case  0x84:
-            // DATETIME (Read date/time and temperature from the RTC. Binary values): 
-            //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-            //                            ---------------------------------------------------------
-            //                I/O DATA 0   D7 D6 D5 D4 D3 D2 D1 D0    seconds [0..59]     (1st data byte)
-            //                I/O DATA 1   D7 D6 D5 D4 D3 D2 D1 D0    minutes [0..59]
-            //                I/O DATA 2   D7 D6 D5 D4 D3 D2 D1 D0    hours   [0..23]
-            //                I/O DATA 3   D7 D6 D5 D4 D3 D2 D1 D0    day     [1..31]
-            //                I/O DATA 4   D7 D6 D5 D4 D3 D2 D1 D0    month   [1..12]
-            //                I/O DATA 5   D7 D6 D5 D4 D3 D2 D1 D0    year    [0..99]
-            //                I/O DATA 6   D7 D6 D5 D4 D3 D2 D1 D0    tempC   [-128..127] (7th data byte)
-            //
-            // NOTE 1: If RTC is not found all read values wil be = 0
-            // NOTE 2: Overread data (more then 7 bytes read) will be = 0
-            // NOTE 3: The temperature (Celsius) is a byte with two complement binary format [-128..127]
-
-            if (foundRTC)
-            {
-               if (ioByteCnt == 0) readRTC(&seconds, &minutes, &hours, &day, &month, &year, &tempC); // Read from RTC
-               if (ioByteCnt < 7)
-               // Send date/time (binary values) to Z80 bus
-               {
-                  switch (ioByteCnt)
-                  {
-                    case 0: ioData = seconds; break;
-                    case 1: ioData = minutes; break;
-                    case 2: ioData = hours; break;
-                    case 3: ioData = day; break;
-                    case 4: ioData = month; break;
-                    case 5: ioData = year; break;
-                    case 6: ioData = tempC; break;
-                  }
-                  ioByteCnt++;
-               }
-               else ioOpcode = 0xFF;              // All done. Set ioOpcode = "No operation"
-            }
-            else ioOpcode = 0xFF;                 // Nothing to do. Set ioOpcode = "No operation"
+          case  DATETIME:
+            ioOpcode = rtcSubsys.Read((Opcodes)ioOpcode, ioData);
           break;
 
           case  ERRDISK:
@@ -797,26 +683,14 @@ void loop()
             // NOTE 3: Only for this disk opcode, the resulting error is read as a data byte without using the 
             //         ERRDISK opcode
             ioData = mountSD();
+            ioOpcode = NO_OP;
           break;
 
           case READDIR:
-            // READ FAT DIR
-            // READDIR - Read the next directory entry for the FAT file path
-            //
-            // 
-            ioOpcode = fatSystem.ReadNextDir(ioData);
-          break;
-
           case READFILE:
-            ioOpcode = fatSystem.ReadFile(ioData);
-          break;
-
           case FILEEXISTS:
-            ioOpcode = fatSystem.FileExists(ioData);
-          break;
-
           case MKDIR:
-            ioOpcode = fatSystem.MakeDir(ioData);
+            ioOpcode = fatSystem.ReadNextDir(ioData);
           break;
 
           case I2CPROBE:
@@ -824,15 +698,6 @@ void loop()
             ioOpcode = wireSubsys.Read((Opcodes)ioOpcode, ioData);
           break;
           }
-          if ((ioOpcode != 0x84) &&
-              (ioOpcode != 0x86) &&
-              (ioOpcode != READDIR) &&
-              (ioOpcode != READFILE) &&
-              (ioOpcode != I2CREAD))
-          {
-            ioOpcode = NO_OP;  // All done for the single byte opcodes. 
-          }
-                                                                          //  Set ioOpcode = "No operation"
         }
         DDRA = 0xFF;                              // Configure Z80 data bus D0-D7 (PA0-PA7) as output
         PORTA = ioData;                           // Current output on data bus

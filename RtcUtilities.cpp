@@ -1,3 +1,4 @@
+#include <time.h>
 #include "Wire.h"
 
 #include "RtcUtilities.h"
@@ -13,31 +14,27 @@ byte decToBcd(byte val);
 byte bcdToDec(byte val);
 byte isLeapYear(byte yearXX);
 void printDateTime(byte readSourceFlag);
+void ChangeRTC();
 
 const byte daysOfMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 byte foundRTC;
-byte seconds;
-byte minutes;
-byte hours;
-byte day;
-byte month;
-byte year;
-byte tempC;
+struct tm gtime;
+int8_t tempC;
 
-void readRTC(byte *second, byte *minute, byte *hour, byte *day, byte *month, byte *year, byte *tempC)
 // Read current date/time binary values and the temprerature (2 complement) from the DS3231 RTC
+void readRTC(struct tm &time, int8_t *tempC)
 {
   byte buffer[18];
   ReadRegisters(DS3231_RTC, DS3231_SECRG, 18, buffer);
   
   byte *ptr = buffer;
-  *second = bcdToDec(*ptr++ & 0x7f);
-  *minute = bcdToDec(*ptr++);
-  *hour = bcdToDec(*ptr++ & 0x3f);
-  ++ptr; // Skip DoW
-  *day = bcdToDec(*ptr++);
-  *month = bcdToDec(*ptr++);
-  *year = bcdToDec(*ptr++);
+  time.tm_sec = bcdToDec(*ptr++ & 0x7f);
+  time.tm_min = bcdToDec(*ptr++);
+  time.tm_hour = bcdToDec(*ptr++ & 0x3f);
+  *ptr++;
+  time.tm_mday = bcdToDec(*ptr++);
+  time.tm_mon = bcdToDec(*ptr++);
+  time.tm_year = bcdToDec(*ptr++);
 
   ptr += 10;
   *tempC = *ptr;
@@ -45,19 +42,19 @@ void readRTC(byte *second, byte *minute, byte *hour, byte *day, byte *month, byt
 
 // ------------------------------------------------------------------------------
 
-void writeRTC(byte second, byte minute, byte hour, byte day, byte month, byte year)
+void writeRTC(struct tm &time)
 // Write given date/time binary values to the DS3231 RTC
 {
   byte buffer[7];
   byte *ptr = buffer;
 
-  *ptr++ = decToBcd(second);
-  *ptr++ = decToBcd(minute);
-  *ptr++ = decToBcd(hour);
-  *ptr++ = 1;                                  // Day of week not used (always set to 1 = Sunday)
-  *ptr++ = decToBcd(day);
-  *ptr++ = decToBcd(month);
-  *ptr = decToBcd(year);
+  *ptr++ = decToBcd(time.tm_sec);
+  *ptr++ = decToBcd(time.tm_min);
+  *ptr++ = decToBcd(time.tm_hour);
+  *ptr++ = 1;
+  *ptr++ = decToBcd(time.tm_mday);
+  *ptr++ = decToBcd(time.tm_mon);
+  *ptr = decToBcd(time.tm_year);
 
   WriteRegisters(DS3231_RTC, DS3231_SECRG, 7, buffer);
 }
@@ -73,7 +70,8 @@ byte autoSetRTC()
 
   if (!ProbeAddress(DS3231_RTC))
   {
-    return 0;      // RTC not found
+    // Rtc not present
+    return 0;
   }
   
   Serial.print(F("IOS: Found RTC DS3231 Module ("));
@@ -89,35 +87,11 @@ byte autoSetRTC()
   ReadRegisters(DS3231_RTC, DS3231_STATRG, 1, &OscStopFlag);
   OscStopFlag &= 0x80;
 
-  if (OscStopFlag)
   // RTC oscillator stopped. RTC must be set at compile date/time
+  if (OscStopFlag)
   {
-    String  compTimeStr(F(" __TIME__"));    // Compile timestamp string
-    String  compDateStr(F("__DATE__"));    // Compile datestamp string
-    
-    // Convert compile time strings to numeric values
-    seconds = compTimeStr.substring(6,8).toInt();
-    minutes = compTimeStr.substring(3,5).toInt();
-    hours = compTimeStr.substring(0,2).toInt();
-    day = compDateStr.substring(4,6).toInt();
-    switch (compDateStr[0]) 
-      {
-        case 'J': month = compDateStr[1] == 'a' ? 1 : month = compDateStr[2] == 'n' ? 6 : 7; break;
-        case 'F': month = 2; break;
-        case 'A': month = compDateStr[2] == 'r' ? 4 : 8; break;
-        case 'M': month = compDateStr[2] == 'r' ? 3 : 5; break;
-        case 'S': month = 9; break;
-        case 'O': month = 10; break;
-        case 'N': month = 11; break;
-        case 'D': month = 12; break;
-      };
-    year = compDateStr.substring(9,11).toInt();
-
-    // Ask for RTC setting al compile date/time
     Serial.println(F("IOS: RTC clock failure!"));
-    Serial.print(F("\nDo you want set RTC at IOS compile time ("));
-    printDateTime(0);
-    Serial.print(F(")? [Y/N] >"));
+    Serial.print(F("\nDo you want set RTC? [Y/N] >"));
     unsigned long timeStamp = millis();
     char inChar;
     do
@@ -131,7 +105,7 @@ byte autoSetRTC()
     // Set the RTC at the compile date/time and print a message
     if (inChar == 'Y')
     {
-      writeRTC(seconds, minutes, hours, day, month, year);
+      ChangeRTC();
       Serial.print(F("IOS: RTC set at compile time - Now: "));
       printDateTime(1);
       Serial.println();
@@ -155,9 +129,9 @@ void printDateTime(byte readSourceFlag)
 {
   if (readSourceFlag)
   {
-    readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
+    readRTC(gtime, &tempC);
   }
-  Serial.printf(F("%2d/%02d/%02d %02d:%02d:%02d"), day, month, year, hours, minutes, seconds);
+  Serial.printf(F("%2d/%02d/%02d %02d:%02d:%02d"), gtime.tm_mday, gtime.tm_mon, gtime.tm_year, gtime.tm_hour, gtime.tm_min, gtime.tm_sec);
 }
 
 // ------------------------------------------------------------------------------
@@ -166,7 +140,7 @@ void ChangeRTC()
 // Change manually the RTC Date/Time from keyboard
 {
   // Read RTC
-  readRTC(&seconds, &minutes, &hours, &day,  &month,  &year, &tempC);
+  readRTC(gtime, &tempC);
 
   // Change RTC date/time from keyboard
   byte partIndex = 0;
@@ -180,27 +154,27 @@ void ChangeRTC()
       switch (partIndex)
       {
         case 0:
-          Serial.printf(F(" Year -> %02d"), year);
+          Serial.printf(F(" Year -> %02d"), gtime.tm_year);
         break;
         
         case 1:
-          Serial.printf(F(" Month -> %02d"), month);
+          Serial.printf(F(" Month -> %02d"), gtime.tm_mon);
         break;
 
         case 2:
-          Serial.printf(F(" Day -> %02d  "), day);
+          Serial.printf(F(" Day -> %02d  "), gtime.tm_mday);
         break;
 
         case 3:
-          Serial.printf(F(" Hours -> %02d"), hours);
+          Serial.printf(F(" Hours -> %02d"), gtime.tm_hour);
         break;
 
         case 4:
-          Serial.printf(F(" Minutes -> %02d"), minutes);
+          Serial.printf(F(" Minutes -> %02d"), gtime.tm_min);
         break;
 
         case 5:
-          Serial.printf(F(" Seconds -> %02d"), seconds);
+          Serial.printf(F(" Seconds -> %02d"), gtime.tm_sec);
         break;
       }
 
@@ -218,40 +192,61 @@ void ChangeRTC()
         switch (partIndex)
         {
           case 0:
-            year++;
-            if (year > 99) year = 0;
+            gtime.tm_year++;
+            if (gtime.tm_year > 99)
+            {
+              gtime.tm_year = 0;
+            }
           break;
 
           case 1:
-            month++;
-            if (month > 12) month = 1;
+            gtime.tm_mon++;
+            if (gtime.tm_mon > 12)
+            {
+              gtime.tm_mon = 1;
+            }
           break;
 
           case 2:
-            day++;
-            if (month == 2)
+            gtime.tm_mday++;
+            if (gtime.tm_mon == 2)
             {
-              if (day > (daysOfMonth[month - 1] + isLeapYear(year))) day = 1;
+              if (gtime.tm_mday > (daysOfMonth[gtime.tm_mon - 1] + isLeapYear(gtime.tm_year)))
+              {
+                gtime.tm_mday = 1;
+              }
             }
             else
             {
-              if (day > (daysOfMonth[month - 1])) day = 1;
+              if (gtime.tm_mday > (daysOfMonth[gtime.tm_mon - 1]))
+              {
+                gtime.tm_mday = 1;
+              }
             }
           break;
 
           case 3:
-            hours++;
-            if (hours > 23) hours = 0;
+            gtime.tm_hour++;
+            if (gtime.tm_hour > 23)
+            {
+              gtime.tm_hour = 0;
+            }
           break;
 
           case 4:
-            minutes++;
-            if (minutes > 59) minutes = 0;
+            gtime.tm_min++;
+            if (gtime.tm_min > 59)
+            {
+              gtime.tm_min = 0;
+            }
           break;
 
           case 5:
-            seconds++;
-            if (seconds > 59) seconds = 0;
+            gtime.tm_sec++;
+            if (gtime.tm_sec > 59)
+            {
+              gtime.tm_sec = 0;
+            }
           break;
         }
       }
@@ -261,34 +256,58 @@ void ChangeRTC()
         switch (partIndex)
         {
           case 0:
-            year = year + 10;
-            if (year > 99) year = year - (year / 10) * 10; 
+            gtime.tm_year = gtime.tm_year + 10;
+            if (gtime.tm_year > 99)
+            {
+              gtime.tm_year = gtime.tm_year - (gtime.tm_year / 10) * 10; 
+            }
           break;
 
           case 1:
-            if (month > 10) month = month - 10;
-            else if (month < 3) month = month + 10;
+            if (gtime.tm_mon > 10)
+            {
+              gtime.tm_mon = gtime.tm_mon - 10;
+            }
+            else if (gtime.tm_mon < 3)
+            {
+              gtime.tm_mon = gtime.tm_mon + 10;
+            }
           break;
 
           case 2:
-            day = day + 10;
-            if (day > (daysOfMonth[month - 1] + isLeapYear(year))) day = day - (day / 10) * 10;
-            if (day == 0) day = 1;
+            gtime.tm_mday = gtime.tm_mday + 10;
+            if (gtime.tm_mday > (daysOfMonth[gtime.tm_mon - 1] + isLeapYear(gtime.tm_year)))
+            {
+              gtime.tm_mday = gtime.tm_mday - (gtime.tm_mday / 10) * 10;
+            }
+            if (gtime.tm_mday == 0)
+            {
+              gtime.tm_mday = 1;
+            }
           break;
 
           case 3:
-            hours = hours + 10;
-            if (hours > 23) hours = hours - (hours / 10 ) * 10;
+            gtime.tm_hour = gtime.tm_hour + 10;
+            if (gtime.tm_hour > 23)
+            {
+              gtime.tm_hour = gtime.tm_hour - (gtime.tm_hour / 10 ) * 10;
+            }
           break;
 
           case 4:
-            minutes = minutes + 10;
-            if (minutes > 59) minutes = minutes - (minutes / 10 ) * 10;
+            gtime.tm_min = gtime.tm_min + 10;
+            if (gtime.tm_min > 59)
+            {
+              gtime.tm_min = gtime.tm_min - (gtime.tm_min / 10 ) * 10;
+            }
           break;
 
           case 5:
-            seconds = seconds + 10;
-            if (seconds > 59) seconds = seconds - (seconds / 10 ) * 10;
+            gtime.tm_sec = gtime.tm_sec + 10;
+            if (gtime.tm_sec > 59)
+            {
+              gtime.tm_sec = gtime.tm_sec - (gtime.tm_sec / 10 ) * 10;
+            }
           break;
         }
       }
@@ -300,7 +319,7 @@ void ChangeRTC()
   while (partIndex < 6);  
 
   // Write new date/time into the RTC
-  writeRTC(seconds, minutes, hours, day, month, year);
+  writeRTC(gtime);
   Serial.println(F(" ...done      "));
   Serial.print(F("IOS: RTC date/time updated ("));
   printDateTime(1);
