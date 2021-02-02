@@ -6,7 +6,7 @@ DriveSubsys::DriveSubsys() : trackSel(0), sectSel(0), diskError(NO_ERROR), diskN
   
 }
 
-Opcodes DriveSubsys::Read(Opcodes opcode, byte &ioByte)
+Opcode DriveSubsys::Read(Opcode opcode, byte &ioByte)
 {
   switch (opcode)
   {
@@ -22,7 +22,7 @@ Opcodes DriveSubsys::Read(Opcodes opcode, byte &ioByte)
   return lastOpcode;
 }
 
-Opcodes DriveSubsys::Write(Opcodes opcode, byte ioByte)
+Opcode DriveSubsys::Write(Opcode opcode, byte ioByte)
 {
   switch (opcode)
   {
@@ -50,7 +50,7 @@ Opcodes DriveSubsys::Write(Opcodes opcode, byte ioByte)
   return lastOpcode;
 }
 
-void DriveSubsys::Reset(Opcodes opcode)
+void DriveSubsys::Reset(Opcode opcode)
 {
   
 }
@@ -65,7 +65,7 @@ byte DriveSubsys::DiskSet()
   return diskSet;
 }
 
-Opcodes DriveSubsys::SelDisk(byte ioByte)
+Opcode DriveSubsys::SelDisk(byte ioByte)
 {
   if (ioByte <= MaxDiskNo)               // Valid disk number
   // Set the name of the file to open as virtual disk, and open it
@@ -85,7 +85,7 @@ Opcodes DriveSubsys::SelDisk(byte ioByte)
   return NO_OP;
 }
 
-Opcodes DriveSubsys::SelTrack(byte ioByte)
+Opcode DriveSubsys::SelTrack(byte ioByte)
 {
   if (lastOpcode != SELTRACK)
   {
@@ -125,7 +125,7 @@ Opcodes DriveSubsys::SelTrack(byte ioByte)
   return lastOpcode;
 }
 
-Opcodes DriveSubsys::SelSect(byte ioByte)
+Opcode DriveSubsys::SelSect(byte ioByte)
 {
   sectSel = ioByte;
   if ((trackSel < TRACK_COUNT) &&
@@ -148,7 +148,7 @@ Opcodes DriveSubsys::SelSect(byte ioByte)
   return NO_OP;
 }
 
-Opcodes DriveSubsys::WriteSect(byte ioByte)
+Opcode DriveSubsys::WriteSect(byte ioByte)
 {
   if (lastOpcode != WRITESECT)
   {
@@ -204,13 +204,13 @@ Opcodes DriveSubsys::WriteSect(byte ioByte)
   return lastOpcode;
 }
 
-Opcodes DriveSubsys::ErrDisk(byte &ioByte)
+Opcode DriveSubsys::ErrDisk(byte &ioByte)
 {
   ioByte = diskError;
   return NO_OP;
 }
 
-Opcodes DriveSubsys::ReadSect(byte &ioByte)
+Opcode DriveSubsys::ReadSect(byte &ioByte)
 {
   if (lastOpcode != READSECT)
   {

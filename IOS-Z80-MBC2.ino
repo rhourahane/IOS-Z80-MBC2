@@ -108,7 +108,7 @@ const byte * const flashBootTable[1] PROGMEM = {boot_A_}; // Payload pointers ta
 // General purpose variables
 byte          ioAddress;                  // Virtual I/O address. Only two possible addresses are valid (0x00 and 0x01)
 byte          ioData;                     // Data byte used for the I/O operation
-Opcodes       ioOpcode       = NO_OP;     // I/O operation code or Opcode (0xFF means "No Operation")
+Opcode       ioOpcode       = NO_OP;     // I/O operation code or Opcode (0xFF means "No Operation")
 byte          moduleGPIO     = 0;         // Set to 1 if the module is found, 0 otherwise
 byte *        BootImage;                  // Pointer to selected flash payload array (image) to boot
 word          BootImageSize  = 0;         // Size of the selected flash payload array (image) to boot
@@ -499,7 +499,7 @@ void loop()
       //         a STORE OPCODE operation before each data byte after the first one.
       // .........................................................................................................
       //
-      // Currently defined Opcodes for I/O write operations:
+      // Currently defined Opcode for I/O write operations:
       //
       //   Opcode     Name            Exchanged bytes
       // -------------------------------------------------
@@ -520,7 +520,7 @@ void loop()
       // Opcode 0xFF  No operation    1
       //
       //
-      // Currently defined Opcodes for I/O read operations:
+      // Currently defined Opcode for I/O read operations:
       //
       //   Opcode     Name            Exchanged bytes
       // -------------------------------------------------
@@ -534,11 +534,11 @@ void loop()
       // Opcode 0x87  SDMOUNT         1
       // Opcode 0xFF  No operation    1
       //
-      // See the following lines for the Opcodes details.
+      // See the following lines for the Opcode details.
       // 
       // .........................................................................................................     
       {
-        ioOpcode = (Opcodes)ioData;                        // Store the I/O operation code (Opcode)
+        ioOpcode = (Opcode)ioData;                        // Store the I/O operation code (Opcode)
       }
       else
       // .........................................................................................................

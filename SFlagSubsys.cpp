@@ -5,7 +5,7 @@ SFlagSubsys::SFlagSubsys(SerialSubsys &serial) : serialSubsys(serial)
   
 }
 
-Opcodes SFlagSubsys::Read(Opcodes opcode, byte &ioByte)
+Opcode SFlagSubsys::Read(Opcode opcode, byte &ioByte)
 {
   switch (opcode)
   {
@@ -17,12 +17,12 @@ Opcodes SFlagSubsys::Read(Opcodes opcode, byte &ioByte)
   return NO_OP;
 }
 
-Opcodes SFlagSubsys::Write(Opcodes opcode, byte ioByte)
+Opcode SFlagSubsys::Write(Opcode opcode, byte ioByte)
 {
   return NO_OP;
 }
 
-void SFlagSubsys::Reset(Opcodes opcode)
+void SFlagSubsys::Reset(Opcode opcode)
 {
 }
 

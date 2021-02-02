@@ -7,9 +7,9 @@ class SerialSubsys: public BaseSubsys
 public:
   SerialSubsys();
   
-  Opcodes Read(Opcodes opcode, byte &ioByte);
-  Opcodes Write(Opcodes opcode, byte ioByte);
-  void Reset(Opcodes opcode);
+  Opcode Read(Opcode opcode, byte &ioByte);
+  Opcode Write(Opcode opcode, byte ioByte);
+  void Reset(Opcode opcode);
 
   byte LastRxIsEmpty();
   void LastRxIsEmpty(byte value);

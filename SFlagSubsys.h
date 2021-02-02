@@ -8,9 +8,9 @@ class SFlagSubsys : public BaseSubsys
 public:
   SFlagSubsys(SerialSubsys &serial);
     
-  Opcodes Read(Opcodes opcode, byte &ioByte);
-  Opcodes Write(Opcodes opcode, byte ioByte);
-  void Reset(Opcodes opcode);
+  Opcode Read(Opcode opcode, byte &ioByte);
+  Opcode Write(Opcode opcode, byte ioByte);
+  void Reset(Opcode opcode);
 
   void FoundRtc(byte value);
   void AutoexecFlag(byte value);

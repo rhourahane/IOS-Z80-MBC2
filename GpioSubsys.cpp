@@ -2,7 +2,7 @@
 #include "WireUtils.h"
 #include "HwDefines.h"
 
-Opcodes GpioSubsys::Read(Opcodes opcode, byte &ioByte)
+Opcode GpioSubsys::Read(Opcode opcode, byte &ioByte)
 {
   switch (opcode)
   {
@@ -17,7 +17,7 @@ Opcodes GpioSubsys::Read(Opcodes opcode, byte &ioByte)
   return NO_OP;
 }
 
-Opcodes GpioSubsys::Write(Opcodes opcode, byte ioByte)
+Opcode GpioSubsys::Write(Opcode opcode, byte ioByte)
 {
   switch (opcode)
   {
@@ -48,6 +48,6 @@ Opcodes GpioSubsys::Write(Opcodes opcode, byte ioByte)
   return NO_OP;
 }
 
-void GpioSubsys::Reset(Opcodes opcode)
+void GpioSubsys::Reset(Opcode opcode)
 {
 }

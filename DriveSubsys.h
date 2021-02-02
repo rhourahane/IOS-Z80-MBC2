@@ -7,22 +7,22 @@ class DriveSubsys : public BaseSubsys
 {
 public:
   DriveSubsys();
-  Opcodes Read(Opcodes opcode, byte &ioByte);
-  Opcodes Write(Opcodes opcode, byte ioByte);
-  void Reset(Opcodes opcode);
+  Opcode Read(Opcode opcode, byte &ioByte);
+  Opcode Write(Opcode opcode, byte ioByte);
+  void Reset(Opcode opcode);
 
   const byte MaxDiskNo = 99;
   void DiskSet(byte diskNo);
   byte DiskSet();
 
 private:
-  Opcodes SelDisk(byte ioByte);
-  Opcodes SelTrack(byte ioByte);
-  Opcodes SelSect(byte ioByte);
-  Opcodes WriteSect(byte ioByte);
+  Opcode SelDisk(byte ioByte);
+  Opcode SelTrack(byte ioByte);
+  Opcode SelSect(byte ioByte);
+  Opcode WriteSect(byte ioByte);
 
-  Opcodes ErrDisk(byte &ioByte);
-  Opcodes ReadSect(byte &ioByte);
+  Opcode ErrDisk(byte &ioByte);
+  Opcode ReadSect(byte &ioByte);
 
 private:
   byte diskSet;

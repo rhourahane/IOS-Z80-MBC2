@@ -5,7 +5,7 @@ SerialSubsys::SerialSubsys() : lastRxIsEmpty(0)
 {
 }
 
-Opcodes SerialSubsys::Read(Opcodes opcode, byte &ioByte)
+Opcode SerialSubsys::Read(Opcode opcode, byte &ioByte)
 {
   ioByte = 0xFF;
   if (Serial.available() > 0)
@@ -24,7 +24,7 @@ Opcodes SerialSubsys::Read(Opcodes opcode, byte &ioByte)
   digitalWrite(INT_, HIGH);
 }
 
-Opcodes SerialSubsys::Write(Opcodes opcode, byte ioByte)
+Opcode SerialSubsys::Write(Opcode opcode, byte ioByte)
 {
   switch (opcode)
   {
@@ -36,7 +36,7 @@ Opcodes SerialSubsys::Write(Opcodes opcode, byte ioByte)
   return NO_OP;
 }
 
-void SerialSubsys::Reset(Opcodes opcode)
+void SerialSubsys::Reset(Opcode opcode)
 {
 }
 

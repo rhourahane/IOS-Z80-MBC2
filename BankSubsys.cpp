@@ -1,11 +1,11 @@
 #include "BankSubsys.h"
 #include "HwDefines.h"
 
-Opcodes BankSubsys::Read(Opcodes opcode, byte &ioByte)
+Opcode BankSubsys::Read(Opcode opcode, byte &ioByte)
 {
 }
 
-Opcodes BankSubsys::Write(Opcodes opcode, byte ioByte)
+Opcode BankSubsys::Write(Opcode opcode, byte ioByte)
 {
   switch (ioByte)
   {
@@ -31,6 +31,6 @@ Opcodes BankSubsys::Write(Opcodes opcode, byte ioByte)
   return NO_OP;
 }
 
-void BankSubsys::Reset(Opcodes opcode)
+void BankSubsys::Reset(Opcode opcode)
 {
 }

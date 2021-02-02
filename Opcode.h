@@ -1,6 +1,6 @@
-#if !defined(_OP_CODES_H_)
-#define _OP_CODES_H_
-enum Opcodes : byte
+#if !defined(_OP_CODE_H_)
+#define _OP_CODE_H_
+enum Opcode : byte
 {
   // Write OpCodes start from 0x00
   // Set the state of the User LED

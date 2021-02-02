@@ -7,14 +7,14 @@ class WireSubsys : public BaseSubsys
 public:
   WireSubsys();
   
-  Opcodes Read(Opcodes opcode, byte &ioByte);
-  Opcodes Write(Opcodes opcode, byte ioByte);
-  void Reset(Opcodes opcode);
+  Opcode Read(Opcode opcode, byte &ioByte);
+  Opcode Write(Opcode opcode, byte ioByte);
+  void Reset(Opcode opcode);
 
 private:
-  Opcodes I2cAddr(byte ioByte);
-  Opcodes DoRead(byte &ioByte);
-  Opcodes DoWrite(byte ioByte);
+  Opcode I2cAddr(byte ioByte);
+  Opcode DoRead(byte &ioByte);
+  Opcode DoWrite(byte ioByte);
 
 private:
   uint8_t addr;

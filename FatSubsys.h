@@ -9,21 +9,21 @@ class FatSystem: public BaseSubsys
 public:
   FatSystem();
 
-  Opcodes Read(Opcodes opcode, byte &ioByte);
-  Opcodes Write(Opcodes opcode, byte ioByte);
-  void Reset(Opcodes opcode);
+  Opcode Read(Opcode opcode, byte &ioByte);
+  Opcode Write(Opcode opcode, byte ioByte);
+  void Reset(Opcode opcode);
   
 //private:
-  Opcodes SetPath(byte ioByte);
-  Opcodes SetSegment(byte ioByte);
+  Opcode SetPath(byte ioByte);
+  Opcode SetSegment(byte ioByte);
 
-  Opcodes FileExists(byte &ioByte);
-  Opcodes ReadNextDir(byte &ioByte);
-  Opcodes ReadFile(byte &ioByte);
-  Opcodes DeleteFile(byte &ioByte);
-  Opcodes MakeDir(byte &ioByte);
+  Opcode FileExists(byte &ioByte);
+  Opcode ReadNextDir(byte &ioByte);
+  Opcode ReadFile(byte &ioByte);
+  Opcode DeleteFile(byte &ioByte);
+  Opcode MakeDir(byte &ioByte);
 
-  Opcodes WriteFile(byte ioByte);
+  Opcode WriteFile(byte ioByte);
   
 private:
   struct FileInfo

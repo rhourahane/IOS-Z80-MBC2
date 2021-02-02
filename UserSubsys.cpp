@@ -1,7 +1,7 @@
 #include "UserSubsys.h"
 #include "HwDefines.h"
 
-Opcodes UserSubsys::Read(Opcodes opcode, byte &ioByte)
+Opcode UserSubsys::Read(Opcode opcode, byte &ioByte)
 {
   if (opcode == USER_KEY)
   {
@@ -17,7 +17,7 @@ Opcodes UserSubsys::Read(Opcodes opcode, byte &ioByte)
   return NO_OP;
 }
 
-Opcodes UserSubsys::Write(Opcodes opcode, byte ioByte)
+Opcode UserSubsys::Write(Opcode opcode, byte ioByte)
 {
   if (opcode == USER_LED)
   {
@@ -35,6 +35,6 @@ Opcodes UserSubsys::Write(Opcodes opcode, byte ioByte)
 }
 
 
-void UserSubsys::Reset(Opcodes opcode)
+void UserSubsys::Reset(Opcode opcode)
 {
 }

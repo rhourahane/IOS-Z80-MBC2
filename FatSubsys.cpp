@@ -6,7 +6,7 @@ FatSystem::FatSystem()
 {
 }
 
-Opcodes FatSystem::Read(Opcodes opcode, byte &ioByte)
+Opcode FatSystem::Read(Opcode opcode, byte &ioByte)
 {
   switch (opcode)
   {
@@ -34,7 +34,7 @@ Opcodes FatSystem::Read(Opcodes opcode, byte &ioByte)
   return lastOpcode;
 }
 
-Opcodes FatSystem::Write(Opcodes opcode, byte ioByte)
+Opcode FatSystem::Write(Opcode opcode, byte ioByte)
 {
   switch (opcode)
   {
@@ -54,12 +54,12 @@ Opcodes FatSystem::Write(Opcodes opcode, byte ioByte)
   return lastOpcode;
 }
 
-void FatSystem::Reset(Opcodes opcode)
+void FatSystem::Reset(Opcode opcode)
 {
   
 }
   
-Opcodes FatSystem::SetPath(byte ioByte)
+Opcode FatSystem::SetPath(byte ioByte)
 {
   if (lastOpcode != SETPATH)
   {
@@ -84,7 +84,7 @@ Opcodes FatSystem::SetPath(byte ioByte)
   return lastOpcode;
 }
 
-Opcodes FatSystem::SetSegment(byte ioByte)
+Opcode FatSystem::SetSegment(byte ioByte)
 {
   if (lastOpcode != SETSEGMENT)
   {
@@ -104,14 +104,14 @@ Opcodes FatSystem::SetSegment(byte ioByte)
   return lastOpcode;
 }
 
-Opcodes FatSystem::FileExists(byte &ioByte)
+Opcode FatSystem::FileExists(byte &ioByte)
 {
   ioByte = SD.exists(filePath.c_str());
 
   return NO_OP;
 }
 
-Opcodes FatSystem::ReadNextDir(byte &ioByte)
+Opcode FatSystem::ReadNextDir(byte &ioByte)
 {
   if (lastOpcode != READDIR)
   {
@@ -169,7 +169,7 @@ Opcodes FatSystem::ReadNextDir(byte &ioByte)
   return lastOpcode;
 }
 
-Opcodes FatSystem::ReadFile(byte &ioByte)
+Opcode FatSystem::ReadFile(byte &ioByte)
 {
   if (lastOpcode != READFILE)
   {
@@ -214,21 +214,21 @@ Opcodes FatSystem::ReadFile(byte &ioByte)
   return lastOpcode;
 }
 
-Opcodes FatSystem::DeleteFile(byte &ioByte)
+Opcode FatSystem::DeleteFile(byte &ioByte)
 {
   ioByte = SD.remove(filePath.c_str());
   
   return NO_OP;
 }
 
-Opcodes FatSystem::MakeDir(byte &ioByte)
+Opcode FatSystem::MakeDir(byte &ioByte)
 {
   ioByte = SD.mkdir(filePath.c_str());
   
   return NO_OP;
 }
 
-Opcodes FatSystem::WriteFile(byte ioByte)
+Opcode FatSystem::WriteFile(byte ioByte)
 {
   if (lastOpcode != WRITEFILE)
   {

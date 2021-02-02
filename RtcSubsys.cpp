@@ -5,7 +5,7 @@ RtcSubsys::RtcSubsys()
 {
 }
 
-Opcodes RtcSubsys::Read(Opcodes opcode, byte &ioByte)
+Opcode RtcSubsys::Read(Opcode opcode, byte &ioByte)
 {
   switch (opcode)
   {
@@ -17,12 +17,12 @@ Opcodes RtcSubsys::Read(Opcodes opcode, byte &ioByte)
   return lastOpcode;
 }
 
-Opcodes RtcSubsys::Write(Opcodes opcode, byte ioByte)
+Opcode RtcSubsys::Write(Opcode opcode, byte ioByte)
 {
 
 }
 
-void RtcSubsys::Reset(Opcodes opcode)
+void RtcSubsys::Reset(Opcode opcode)
 {
 
 }
@@ -37,7 +37,7 @@ byte RtcSubsys::foundRtc()
   return rtcFound;
 }
 
-Opcodes RtcSubsys::ReadTime(byte &ioByte)
+Opcode RtcSubsys::ReadTime(byte &ioByte)
 {
   if (rtcFound)
   {

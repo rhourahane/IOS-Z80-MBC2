@@ -7,7 +7,7 @@ WireSubsys::WireSubsys() : addr(0), transfer(0)
   
 }
 
-Opcodes WireSubsys::Read(Opcodes opcode, byte &ioByte)
+Opcode WireSubsys::Read(Opcode opcode, byte &ioByte)
 {
   switch (opcode)
   {
@@ -24,7 +24,7 @@ Opcodes WireSubsys::Read(Opcodes opcode, byte &ioByte)
   return lastOpcode;
 }
 
-Opcodes WireSubsys::Write(Opcodes opcode, byte ioByte)
+Opcode WireSubsys::Write(Opcode opcode, byte ioByte)
 {
   switch (opcode)
   {
@@ -40,12 +40,12 @@ Opcodes WireSubsys::Write(Opcodes opcode, byte ioByte)
   return lastOpcode;
 }
 
-void WireSubsys::Reset(Opcodes opcode)
+void WireSubsys::Reset(Opcode opcode)
 {
   
 }
 
-Opcodes WireSubsys::I2cAddr(byte ioByte)
+Opcode WireSubsys::I2cAddr(byte ioByte)
 {
   if (lastOpcode != I2CADDR)
   {
@@ -69,7 +69,7 @@ Opcodes WireSubsys::I2cAddr(byte ioByte)
   return lastOpcode;
 }
 
-Opcodes WireSubsys::DoRead(byte &ioByte)
+Opcode WireSubsys::DoRead(byte &ioByte)
 {
   if (lastOpcode != I2CREAD)
   {
@@ -95,7 +95,7 @@ Opcodes WireSubsys::DoRead(byte &ioByte)
   return lastOpcode;
 }
 
-Opcodes WireSubsys::DoWrite(byte ioByte)
+Opcode WireSubsys::DoWrite(byte ioByte)
 {
   if (lastOpcode != I2CWRITE)
   {

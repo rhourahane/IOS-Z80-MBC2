@@ -5,9 +5,9 @@
 class BankSubsys : public BaseSubsys
 {
 public:
-  virtual Opcodes Read(Opcodes opcode, byte &ioByte);
-  virtual Opcodes Write(Opcodes opcode, byte ioByte);
-  virtual void Reset(Opcodes opcode);
+  virtual Opcode Read(Opcode opcode, byte &ioByte);
+  virtual Opcode Write(Opcode opcode, byte ioByte);
+  virtual void Reset(Opcode opcode);
 };
 
 #endif

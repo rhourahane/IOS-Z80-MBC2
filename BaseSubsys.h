@@ -8,12 +8,12 @@ class BaseSubsys
 public:
   BaseSubsys();
   
-  virtual Opcodes Read(Opcodes opcode, byte &ioByte) = 0;
-  virtual Opcodes Write(Opcodes opcode, byte ioByte) = 0;
-  virtual void Reset(Opcodes opcode) = 0;
+  virtual Opcode Read(Opcode opcode, byte &ioByte) = 0;
+  virtual Opcode Write(Opcode opcode, byte ioByte) = 0;
+  virtual void Reset(Opcode opcode) = 0;
 
 protected:
-  static Opcodes lastOpcode;
+  static Opcode lastOpcode;
   static int ioCount;
   static byte ioBuffer[128];
 };
