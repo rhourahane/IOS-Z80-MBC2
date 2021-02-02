@@ -43,40 +43,15 @@ Opcodes RtcSubsys::ReadTime(byte &ioByte)
   {
     if (lastOpcode != DATETIME)
     {
-      readRTC(curTime, &tempC);
+      readRTC((RtcTime&)ioBuffer);
       ioCount = 0;
       lastOpcode = DATETIME;
     }
 
     // Send date/time (binary values) to Z80 bus
-    if (ioCount < 7)
+    if (ioCount < sizeof(RtcTime))
     {
-      switch (ioCount)
-      {
-        case 0:
-          ioByte = curTime.tm_sec;
-          break;
-        case 1:
-          ioByte = curTime.tm_min;
-          break;
-        case 2:
-          ioByte = curTime.tm_hour;
-          break;
-        case 3:
-          ioByte = curTime.tm_mday;
-          break;
-        case 4:
-          ioByte = curTime.tm_mon;
-          break;
-        case 5:
-          ioByte = curTime.tm_year;
-          break;
-        case 6:
-          ioByte = tempC;
-          return NO_OP;
-          break;
-      }
-      ioCount++;
+      ioByte = ioBuffer[ioCount++];
     }
     else
     {

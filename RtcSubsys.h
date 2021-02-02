@@ -1,7 +1,7 @@
 #if !defined(_RTCSUBSYS_H_)
 #define _RTCSUBSYS_H_
-#include <time.h>
 #include "BaseSubsys.h"
+#include "RtcUtilities.h"
 
 class RtcSubsys : BaseSubsys
 {
@@ -20,7 +20,5 @@ private:
 
 private:
   byte rtcFound;
-  struct tm curTime;
-  int8_t tempC;
 };
 #endif

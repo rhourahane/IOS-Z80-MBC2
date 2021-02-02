@@ -30,7 +30,6 @@ private:
   word trackSel;      // Store the current track number [0..511]
   byte sectSel;       // Store the current sector number [0..31]
   byte diskError;
-  byte bufferSD[SEGMENT_SIZE];
 };
 
 #endif

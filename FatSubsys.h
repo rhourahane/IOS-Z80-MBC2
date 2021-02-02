@@ -33,14 +33,12 @@ private:
     byte attrib;
   };
 
-  void CopyFileInfo(File &file, FileInfo &info);
+  void CopyFileInfo(File &file, byte *buffer);
   
   File openFile;
   String filePath;
   uint8_t dirCount;
   uint16_t segment;
-  FileInfo fileInfo;
-  byte ioBuffer[128];
   byte maxIoCount;
 };
 

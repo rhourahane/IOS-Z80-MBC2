@@ -1,7 +1,7 @@
 #if !defined(_BASESUBSYS_H_)
 #define _BASESUBSYS_H_
 #include <Arduino.h>
-#include "Opcodes.h"
+#include "Opcode.h"
 
 class BaseSubsys
 {
@@ -15,6 +15,7 @@ public:
 protected:
   static Opcodes lastOpcode;
   static int ioCount;
+  static byte ioBuffer[128];
 };
 
 #endif

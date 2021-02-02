@@ -75,7 +75,6 @@ Opcodes DriveSubsys::SelDisk(byte ioByte)
     diskName[5] = ioByte - ((ioByte / 10) * 10) + 48;
 
     diskError = openSD(diskName);           // Open the "disk file" corresponding to the given disk number
-    //Serial.printf(F("Set drive to %s diskError:%d\n\r"), diskName, diskError);
   }
   else
   {
@@ -101,7 +100,6 @@ Opcodes DriveSubsys::SelTrack(byte ioByte)
   else
   {
     trackSel = (((word) ioByte) << 8) | lowByte(trackSel);
-    //Serial.printf(F("Set track to %d\n\r"), trackSel);
     if ((trackSel < TRACK_COUNT) &&
         (sectSel < SECTOR_COUNT))
     {
@@ -130,7 +128,6 @@ Opcodes DriveSubsys::SelTrack(byte ioByte)
 Opcodes DriveSubsys::SelSect(byte ioByte)
 {
   sectSel = ioByte;
-  //Serial.printf(F("Set sector to %d\n\r"), sectSel);
   if ((trackSel < TRACK_COUNT) &&
       (sectSel < SECTOR_COUNT))
   {
@@ -179,13 +176,13 @@ Opcodes DriveSubsys::WriteSect(byte ioByte)
   {
     // [0..SEGMENT_SIZE]
     byte tempByte = ioCount % SEGMENT_SIZE;
-    bufferSD[tempByte] = ioByte;
+    ioBuffer[tempByte] = ioByte;
     
     // Buffer full. Write all the buffer content (SEGMENT_SIZE bytes) into the "disk file"
     if (tempByte == (SEGMENT_SIZE - 1))
     {
       byte numWritten;
-      diskError = writeSD(bufferSD, &numWritten);
+      diskError = writeSD(ioBuffer, &numWritten);
       if (numWritten < SEGMENT_SIZE)
       {
         diskError = UNEXPECTED_EOF;
@@ -221,7 +218,6 @@ Opcodes DriveSubsys::ReadSect(byte &ioByte)
     lastOpcode = READSECT;
   }
   
-  //Serial.printf(F("Reading sector T:%d S:%d ioCount:%d diskError:%d\n\r"), trackSel, sectSel, ioCount, diskError);
   // First byte of 512, so set the right file pointer to the current emulated track/sector first
   if (ioCount == 0)
   {
@@ -233,7 +229,6 @@ Opcodes DriveSubsys::ReadSect(byte &ioByte)
       // generating a 14 bit "disk file" LBA-like 
       // logical sector address created as TTTTTTTTTSSSSS
       diskError = seekSD((trackSel << 5) | sectSel);
-      //Serial.printf(F("Seeking to sector T:%d S:%d offset:%d diskError:%d\n\r"), trackSel, sectSel, (trackSel << 5) | sectSel, diskError);
     }
   }
   
@@ -243,17 +238,16 @@ Opcodes DriveSubsys::ReadSect(byte &ioByte)
     if (tempByte == 0)
     {
       byte numRead;
-      diskError = readSD(bufferSD, &numRead); 
+      diskError = readSD(ioBuffer, &numRead); 
       if (numRead < SEGMENT_SIZE)
       {
         diskError = UNEXPECTED_EOF;
       }
-      //Serial.printf(F("Reading sector T:%d S:%d numRead:%d diskError:%d\n\r"), trackSel, sectSel, numRead, diskError);
     }
     
     if (diskError == NO_ERROR)
     {
-      ioByte = bufferSD[tempByte];
+      ioByte = ioBuffer[tempByte];
     }
   }
   

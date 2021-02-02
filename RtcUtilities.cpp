@@ -1,4 +1,3 @@
-#include <time.h>
 #include "Wire.h"
 
 #include "RtcUtilities.h"
@@ -18,43 +17,42 @@ void ChangeRTC();
 
 const byte daysOfMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 byte foundRTC;
-struct tm gtime;
-int8_t tempC;
+RtcTime gtime;
 
 // Read current date/time binary values and the temprerature (2 complement) from the DS3231 RTC
-void readRTC(struct tm &time, int8_t *tempC)
+void readRTC(RtcTime &rtcTime)
 {
   byte buffer[18];
   ReadRegisters(DS3231_RTC, DS3231_SECRG, 18, buffer);
   
   byte *ptr = buffer;
-  time.tm_sec = bcdToDec(*ptr++ & 0x7f);
-  time.tm_min = bcdToDec(*ptr++);
-  time.tm_hour = bcdToDec(*ptr++ & 0x3f);
+  rtcTime.second = bcdToDec(*ptr++ & 0x7f);
+  rtcTime.minute = bcdToDec(*ptr++);
+  rtcTime.hour = bcdToDec(*ptr++ & 0x3f);
   *ptr++;
-  time.tm_mday = bcdToDec(*ptr++);
-  time.tm_mon = bcdToDec(*ptr++);
-  time.tm_year = bcdToDec(*ptr++);
+  rtcTime.day = bcdToDec(*ptr++);
+  rtcTime.month = bcdToDec(*ptr++);
+  rtcTime.year = bcdToDec(*ptr++);
 
   ptr += 10;
-  *tempC = *ptr;
+  rtcTime.tempC = *ptr;
 }
 
 // ------------------------------------------------------------------------------
 
-void writeRTC(struct tm &time)
+void writeRTC(RtcTime &rtcTime)
 // Write given date/time binary values to the DS3231 RTC
 {
   byte buffer[7];
   byte *ptr = buffer;
 
-  *ptr++ = decToBcd(time.tm_sec);
-  *ptr++ = decToBcd(time.tm_min);
-  *ptr++ = decToBcd(time.tm_hour);
+  *ptr++ = decToBcd(rtcTime.second);
+  *ptr++ = decToBcd(rtcTime.minute);
+  *ptr++ = decToBcd(rtcTime.hour);
   *ptr++ = 1;
-  *ptr++ = decToBcd(time.tm_mday);
-  *ptr++ = decToBcd(time.tm_mon);
-  *ptr = decToBcd(time.tm_year);
+  *ptr++ = decToBcd(rtcTime.day);
+  *ptr++ = decToBcd(rtcTime.month);
+  *ptr = decToBcd(rtcTime.year);
 
   WriteRegisters(DS3231_RTC, DS3231_SECRG, 7, buffer);
 }
@@ -80,7 +78,7 @@ byte autoSetRTC()
 
   // Print the temperaturefrom the RTC sensor
   Serial.print(F("IOS: RTC DS3231 temperature sensor: "));
-  Serial.print((int8_t)tempC);
+  Serial.print(gtime.tempC);
   Serial.println(F("C"));
   
   // Read the "Oscillator Stop Flag"
@@ -129,9 +127,9 @@ void printDateTime(byte readSourceFlag)
 {
   if (readSourceFlag)
   {
-    readRTC(gtime, &tempC);
+    readRTC(gtime);
   }
-  Serial.printf(F("%2d/%02d/%02d %02d:%02d:%02d"), gtime.tm_mday, gtime.tm_mon, gtime.tm_year, gtime.tm_hour, gtime.tm_min, gtime.tm_sec);
+  Serial.printf(F("%02d/%02d/%02d %02d:%02d:%02d"), gtime.day, gtime.month, gtime.year, gtime.hour, gtime.minute, gtime.second);
 }
 
 // ------------------------------------------------------------------------------
@@ -140,7 +138,7 @@ void ChangeRTC()
 // Change manually the RTC Date/Time from keyboard
 {
   // Read RTC
-  readRTC(gtime, &tempC);
+  readRTC(gtime);
 
   // Change RTC date/time from keyboard
   byte partIndex = 0;
@@ -154,27 +152,27 @@ void ChangeRTC()
       switch (partIndex)
       {
         case 0:
-          Serial.printf(F(" Year -> %02d"), gtime.tm_year);
+          Serial.printf(F(" Year -> %02d"), gtime.year);
         break;
         
         case 1:
-          Serial.printf(F(" Month -> %02d"), gtime.tm_mon);
+          Serial.printf(F(" Month -> %02d"), gtime.month);
         break;
 
         case 2:
-          Serial.printf(F(" Day -> %02d  "), gtime.tm_mday);
+          Serial.printf(F(" Day -> %02d  "), gtime.day);
         break;
 
         case 3:
-          Serial.printf(F(" Hours -> %02d"), gtime.tm_hour);
+          Serial.printf(F(" Hours -> %02d"), gtime.hour);
         break;
 
         case 4:
-          Serial.printf(F(" Minutes -> %02d"), gtime.tm_min);
+          Serial.printf(F(" Minutes -> %02d"), gtime.minute);
         break;
 
         case 5:
-          Serial.printf(F(" Seconds -> %02d"), gtime.tm_sec);
+          Serial.printf(F(" Seconds -> %02d"), gtime.second);
         break;
       }
 
@@ -192,60 +190,60 @@ void ChangeRTC()
         switch (partIndex)
         {
           case 0:
-            gtime.tm_year++;
-            if (gtime.tm_year > 99)
+            gtime.year++;
+            if (gtime.year > 99)
             {
-              gtime.tm_year = 0;
+              gtime.year = 0;
             }
           break;
 
           case 1:
-            gtime.tm_mon++;
-            if (gtime.tm_mon > 12)
+            gtime.month++;
+            if (gtime.month > 12)
             {
-              gtime.tm_mon = 1;
+              gtime.month = 1;
             }
           break;
 
           case 2:
-            gtime.tm_mday++;
-            if (gtime.tm_mon == 2)
+            gtime.day++;
+            if (gtime.month == 2)
             {
-              if (gtime.tm_mday > (daysOfMonth[gtime.tm_mon - 1] + isLeapYear(gtime.tm_year)))
+              if (gtime.day > (daysOfMonth[gtime.month - 1] + isLeapYear(gtime.year)))
               {
-                gtime.tm_mday = 1;
+                gtime.day = 1;
               }
             }
             else
             {
-              if (gtime.tm_mday > (daysOfMonth[gtime.tm_mon - 1]))
+              if (gtime.day > (daysOfMonth[gtime.month - 1]))
               {
-                gtime.tm_mday = 1;
+                gtime.day = 1;
               }
             }
           break;
 
           case 3:
-            gtime.tm_hour++;
-            if (gtime.tm_hour > 23)
+            gtime.hour++;
+            if (gtime.hour > 23)
             {
-              gtime.tm_hour = 0;
+              gtime.hour = 0;
             }
           break;
 
           case 4:
-            gtime.tm_min++;
-            if (gtime.tm_min > 59)
+            gtime.minute++;
+            if (gtime.minute > 59)
             {
-              gtime.tm_min = 0;
+              gtime.minute = 0;
             }
           break;
 
           case 5:
-            gtime.tm_sec++;
-            if (gtime.tm_sec > 59)
+            gtime.second++;
+            if (gtime.second > 59)
             {
-              gtime.tm_sec = 0;
+              gtime.second = 0;
             }
           break;
         }
@@ -256,57 +254,57 @@ void ChangeRTC()
         switch (partIndex)
         {
           case 0:
-            gtime.tm_year = gtime.tm_year + 10;
-            if (gtime.tm_year > 99)
+            gtime.year = gtime.year + 10;
+            if (gtime.year > 99)
             {
-              gtime.tm_year = gtime.tm_year - (gtime.tm_year / 10) * 10; 
+              gtime.year = gtime.year - (gtime.year / 10) * 10; 
             }
           break;
 
           case 1:
-            if (gtime.tm_mon > 10)
+            if (gtime.month > 10)
             {
-              gtime.tm_mon = gtime.tm_mon - 10;
+              gtime.month = gtime.month - 10;
             }
-            else if (gtime.tm_mon < 3)
+            else if (gtime.month < 3)
             {
-              gtime.tm_mon = gtime.tm_mon + 10;
+              gtime.month = gtime.month + 10;
             }
           break;
 
           case 2:
-            gtime.tm_mday = gtime.tm_mday + 10;
-            if (gtime.tm_mday > (daysOfMonth[gtime.tm_mon - 1] + isLeapYear(gtime.tm_year)))
+            gtime.day = gtime.day + 10;
+            if (gtime.day > (daysOfMonth[gtime.month - 1] + isLeapYear(gtime.year)))
             {
-              gtime.tm_mday = gtime.tm_mday - (gtime.tm_mday / 10) * 10;
+              gtime.day = gtime.day - (gtime.day / 10) * 10;
             }
-            if (gtime.tm_mday == 0)
+            if (gtime.day == 0)
             {
-              gtime.tm_mday = 1;
+              gtime.day = 1;
             }
           break;
 
           case 3:
-            gtime.tm_hour = gtime.tm_hour + 10;
-            if (gtime.tm_hour > 23)
+            gtime.hour = gtime.hour + 10;
+            if (gtime.hour > 23)
             {
-              gtime.tm_hour = gtime.tm_hour - (gtime.tm_hour / 10 ) * 10;
+              gtime.hour = gtime.hour - (gtime.hour / 10 ) * 10;
             }
           break;
 
           case 4:
-            gtime.tm_min = gtime.tm_min + 10;
-            if (gtime.tm_min > 59)
+            gtime.minute = gtime.minute + 10;
+            if (gtime.minute > 59)
             {
-              gtime.tm_min = gtime.tm_min - (gtime.tm_min / 10 ) * 10;
+              gtime.minute = gtime.minute - (gtime.minute / 10 ) * 10;
             }
           break;
 
           case 5:
-            gtime.tm_sec = gtime.tm_sec + 10;
-            if (gtime.tm_sec > 59)
+            gtime.second = gtime.second + 10;
+            if (gtime.second > 59)
             {
-              gtime.tm_sec = gtime.tm_sec - (gtime.tm_sec / 10 ) * 10;
+              gtime.second = gtime.second - (gtime.second / 10 ) * 10;
             }
           break;
         }

@@ -198,8 +198,16 @@ enum Opcodes : byte
   // I/O DATA 1   D7 D6 D5 D4 D3 D2 D1 D0    MSB
   // Note: Each seqment is 128 bytes long except the last one which can be any size.
   SETSEGMENT   = 0x0F,
-  
-  WRITEFILE    = 0x10,
+
+  // Write a segment to a FAT file previously set via SETPATH
+  // I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
+  // ---------------------------------------------------------
+  // I/O DATA 0   D7 D6 D5 D4 D3 D2 D1 D0    Bytes to be written max 128
+  // I/O DATA 1   D7 D6 D5 D4 D3 D2 D1 D0    Byte 1 of segement
+  //     |                  |
+  // I/O DATA N   D7 D6 D5 D4 D3 D2 D1 D0    Last by of segment
+  // Note: Less than 128 bytes can be written if the file size is not a multiple of 128.
+  WRITEFILE = 0x10,
 
   // Set the address and number of bytes for I2C reads and writes
   // I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
@@ -340,11 +348,52 @@ enum Opcodes : byte
   // NOTE 3: Only for this disk opcode, the resulting error is read as a data byte without using the 
   //         ERRDISK opcode
   SDMOUNT = 0x87,
+
+  // Read next directory entry from directory set via SETPATH
+  //
+  // I/O DATA:     D7 D6 D5 D4 D3 D2 D1 D0
+  // ---------------------------------------------------------
+  // I/O DATA 0    D7 D6 D5 D4 D3 D2 D1 D0    1st byte of file name
+  //     |                   |
+  // I/O DATA 12   D7 D6 D5 D4 D3 D2 D1 D0    12th and last byte of file name
+  // I/O DATA 13   D7 D6 D5 D4 D3 D2 D1 D0    MSB File size in bytes
+  //     |                   |
+  // I/O DATA 16   D7 D6 D5 D4 D3 D2 D1 D0    LSB File size in bytes
+  // I/O DATA 17   D7 D6 D5 D4 D3 D2 D1 D0    File attributes
+  //
+  // NOTE 1: The file name is terminated with a '\0' character
+  // NOTE 2: The file attributes D0 indicates a directory
+  READDIR = 0x88,
+
+  // Read up to 128 data bytes sequentially from a FAT file set via SETPATH
+  // I/O DATA:     D7 D6 D5 D4 D3 D2 D1 D0
+  // ---------------------------------------------------------
+  // I/O DATA 0    D7 D6 D5 D4 D3 D2 D1 D0    Number of bytes read
+  // I/O DATA 1    D7 D6 D5 D4 D3 D2 D1 D0    1st Data byte
+  //       |                |
+  // I/O DATA 128  D7 D6 D5 D4 D3 D2 D1 D0    128th Data byte
+  //
+  // NOTE: The final segment of the file will 
+  READFILE = 0x89,
+
+  // Find if the file exists FAT file set via SETPATH
+  // I/O DATA:     D7 D6 D5 D4 D3 D2 D1 D0
+  // ---------------------------------------------------------
+  // I/O DATA 0    D7 D6 D5 D4 D3 D2 D1 D0    Status
+  //
+  // NOTE: 1 file exists otherwise 0
+  FILEEXISTS = 0x8A,
   
-  READDIR      = 0x88,
-  READFILE     = 0x89,
-  FILEEXISTS   = 0x8A,
-  MKDIR        = 0x8B,
+  // Create a directory in the FAT file system set via SETPATH
+  // I/O DATA:     D7 D6 D5 D4 D3 D2 D1 D0
+  // ---------------------------------------------------------
+  // I/O DATA 0    D7 D6 D5 D4 D3 D2 D1 D0    Status
+  MKDIR = 0x8B,
+
+  // Delete the FAT file set via SETPATH
+  // I/O DATA:     D7 D6 D5 D4 D3 D2 D1 D0
+  // ---------------------------------------------------------
+  // I/O DATA 0    D7 D6 D5 D4 D3 D2 D1 D0    Status
   DELFILE = 0x8C,
 
   // Probe an address on the I2C bus

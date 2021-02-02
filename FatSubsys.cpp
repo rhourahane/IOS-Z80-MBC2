@@ -120,7 +120,6 @@ Opcodes FatSystem::ReadNextDir(byte &ioByte)
       openFile = SD.open(filePath.c_str());
     }
     
-    memset(&fileInfo, 0, sizeof(fileInfo));
     dirCount = 0;
     ioCount = 0;
   }
@@ -135,7 +134,7 @@ Opcodes FatSystem::ReadNextDir(byte &ioByte)
     File entry = openFile.openNextFile();
     if (entry)
     {
-      CopyFileInfo(entry, fileInfo);
+      CopyFileInfo(entry, ioBuffer);
       ++dirCount;
       ioCount = 0;
       lastOpcode = READDIR;
@@ -144,7 +143,7 @@ Opcodes FatSystem::ReadNextDir(byte &ioByte)
     {
       if (dirCount == 0)
       {
-        CopyFileInfo(openFile, fileInfo);
+        CopyFileInfo(openFile, ioBuffer);
         ioCount = 0;
         lastOpcode = READDIR;
         ++dirCount;
@@ -160,7 +159,7 @@ Opcodes FatSystem::ReadNextDir(byte &ioByte)
 
   if (ioCount != sizeof(FileInfo))
   {
-    ioByte = ((byte*)&fileInfo)[ioCount++];
+    ioByte = ioBuffer[ioCount++];
     if (ioCount == sizeof(FileInfo))
     {
       ioCount = 0;
@@ -184,7 +183,6 @@ Opcodes FatSystem::ReadFile(byte &ioByte)
       if (openFile.seek(segment << 7))
       {
         maxIoCount = openFile.read(ioBuffer, sizeof(ioBuffer));
-        Serial.printf(F("Read offset %d bytes read %d\n\r"), segment << 7, maxIoCount);
         if (maxIoCount > 0)
         {
           lastOpcode = READFILE;
@@ -274,10 +272,11 @@ Opcodes FatSystem::WriteFile(byte ioByte)
 }
 
 
-void FatSystem::CopyFileInfo(File &file, FileInfo &info)
+void FatSystem::CopyFileInfo(File &file, byte *buffer)
 {
-  strncpy(info.name, file.name(), 12);
-  info.name[12] = '\0';
-  info.size = file.size();
-  info.attrib = file.isDirectory();
+  FileInfo *info = (FileInfo *)buffer;
+  strncpy(info->name, file.name(), 12);
+  info->name[12] = '\0';
+  info->size = file.size();
+  info->attrib = file.isDirectory();
 }
