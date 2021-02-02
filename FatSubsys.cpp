@@ -2,18 +2,56 @@
 
 #include "FatSubsys.h"
 
-FatSystem::FatSystem() : ioCount(0), lastOpCode(NO_OP)
+FatSystem::FatSystem()
 {
 }
 
 Opcodes FatSystem::Read(Opcodes opcode, byte &ioByte)
 {
-  
+  switch (opcode)
+  {
+    case READDIR:
+      lastOpcode = ReadNextDir(ioByte);
+      break;
+      
+    case READFILE:
+      lastOpcode = ReadFile(ioByte);
+      break;
+      
+    case FILEEXISTS:
+      lastOpcode = FileExists(ioByte);
+      break;
+      
+    case MKDIR:
+      lastOpcode = MakeDir(ioByte);
+      break;
+
+    case DELFILE:
+      lastOpcode = DeleteFile(ioByte);
+      break;
+  }
+
+  return lastOpcode;
 }
 
 Opcodes FatSystem::Write(Opcodes opcode, byte ioByte)
 {
-  
+  switch (opcode)
+  {
+    case SETPATH:
+      lastOpcode = SetPath(ioByte);
+      break;
+
+    case SETSEGMENT:
+      lastOpcode = SetSegment(ioByte);
+      break;
+
+    case WRITEFILE:
+      lastOpcode = WriteFile(ioByte);
+      break;
+  }
+
+  return lastOpcode;
 }
 
 void FatSystem::Reset(Opcodes opcode)
@@ -23,10 +61,10 @@ void FatSystem::Reset(Opcodes opcode)
   
 Opcodes FatSystem::SetPath(byte ioByte)
 {
-  if (lastOpCode != SETPATH)
+  if (lastOpcode != SETPATH)
   {
     filePath = "";
-    lastOpCode = SETPATH;
+    lastOpcode = SETPATH;
   }
   
   if (ioByte == 0)
@@ -36,34 +74,34 @@ Opcodes FatSystem::SetPath(byte ioByte)
       openFile.close();
     }
 
-    lastOpCode = NO_OP;
+    lastOpcode = NO_OP;
   }
   else
   {
       filePath.concat((char)ioByte);
   }
   
-  return lastOpCode;
+  return lastOpcode;
 }
 
 Opcodes FatSystem::SetSegment(byte ioByte)
 {
-  if (lastOpCode != SETSEGMENT)
+  if (lastOpcode != SETSEGMENT)
   {
     ioCount = 1;
     segment = ioByte;
-    lastOpCode = SETSEGMENT;
+    lastOpcode = SETSEGMENT;
   }
   else
   {
     if (ioCount == 1)
     {
       segment += (uint16_t)ioByte << 8;
-      lastOpCode = NO_OP;
+      lastOpcode = NO_OP;
     }
   }
 
-  return lastOpCode;
+  return lastOpcode;
 }
 
 Opcodes FatSystem::FileExists(byte &ioByte)
@@ -75,7 +113,7 @@ Opcodes FatSystem::FileExists(byte &ioByte)
 
 Opcodes FatSystem::ReadNextDir(byte &ioByte)
 {
-  if (lastOpCode != READDIR)
+  if (lastOpcode != READDIR)
   {
     if (filePath.length() > 0)
     {
@@ -100,7 +138,7 @@ Opcodes FatSystem::ReadNextDir(byte &ioByte)
       CopyFileInfo(entry, fileInfo);
       ++dirCount;
       ioCount = 0;
-      lastOpCode = READDIR;
+      lastOpcode = READDIR;
     }
     else
     {
@@ -108,14 +146,14 @@ Opcodes FatSystem::ReadNextDir(byte &ioByte)
       {
         CopyFileInfo(openFile, fileInfo);
         ioCount = 0;
-        lastOpCode = READDIR;
+        lastOpcode = READDIR;
         ++dirCount;
       }
       else
       {
-        lastOpCode = NO_OP;
+        lastOpcode = NO_OP;
         ioByte = 0;
-        return lastOpCode;
+        return lastOpcode;
       }
     }
   }
@@ -129,12 +167,12 @@ Opcodes FatSystem::ReadNextDir(byte &ioByte)
     }
   }
 
-  return lastOpCode;
+  return lastOpcode;
 }
 
 Opcodes FatSystem::ReadFile(byte &ioByte)
 {
-  if (lastOpCode != READFILE)
+  if (lastOpcode != READFILE)
   {
     ioCount = 0;
     if (filePath.length() > 0)
@@ -149,7 +187,7 @@ Opcodes FatSystem::ReadFile(byte &ioByte)
         Serial.printf(F("Read offset %d bytes read %d\n\r"), segment << 7, maxIoCount);
         if (maxIoCount > 0)
         {
-          lastOpCode = READFILE;
+          lastOpcode = READFILE;
         }
       }
       else
@@ -171,11 +209,11 @@ Opcodes FatSystem::ReadFile(byte &ioByte)
     if (ioCount == maxIoCount)
     {
       Serial.printf(F("Finished reading segment of %d\n\r"), maxIoCount);
-      lastOpCode = NO_OP;
+      lastOpcode = NO_OP;
     }
   }
 
-  return lastOpCode;
+  return lastOpcode;
 }
 
 Opcodes FatSystem::DeleteFile(byte &ioByte)
@@ -194,7 +232,7 @@ Opcodes FatSystem::MakeDir(byte &ioByte)
 
 Opcodes FatSystem::WriteFile(byte ioByte)
 {
-  if (lastOpCode != WRITEFILE)
+  if (lastOpcode != WRITEFILE)
   {
     if (filePath.length() > 0)
     {
@@ -202,14 +240,14 @@ Opcodes FatSystem::WriteFile(byte ioByte)
     }
     ioCount = 0;
     maxIoCount = ioByte <= sizeof(ioBuffer) ? ioByte : sizeof(ioBuffer);
-    lastOpCode = WRITEFILE;
+    lastOpcode = WRITEFILE;
   }
   else
   {
     ioBuffer[ioCount++] = ioByte;
     if (ioCount == maxIoCount)
     {
-      lastOpCode = NO_OP;
+      lastOpcode = NO_OP;
       if (openFile)
       {
         if (openFile.seek(segment << 7))
@@ -229,10 +267,10 @@ Opcodes FatSystem::WriteFile(byte ioByte)
       {
         Serial.printf(F("File not open\n\r"));
       }
-      lastOpCode = NO_OP;    }
+      lastOpcode = NO_OP;    }
   }
 
-  return lastOpCode;
+  return lastOpcode;
 }
 
 

@@ -40,6 +40,7 @@ Notes:
 #include "DriveSubsys.h"
 #include "BankSubsys.h"
 #include "RtcSubsys.h"
+#include "SerialSubsys.h"
 
 #define HW_VERSION "A040618"
 #define SW_VERSION "RMH-OS-MORE"
@@ -68,8 +69,6 @@ byte *        BootImage;                  // Pointer to selected flash payload a
 word          BootImageSize  = 0;         // Size of the selected flash payload array (image) to boot
 word          BootStrAddr;                // Starting address of the selected program to boot (from flash or SD)
 byte          Z80IntEnFlag   = 0;         // Z80 INT_ enable flag (0 = No INT_ used, 1 = INT_ used for I/O)
-byte          LastRxIsEmpty;              // "Last Rx char was empty" flag. Is set when a serial Rx operation was done
-                                          // when the Rx buffer was empty
 
 ConfigOptions SystemOptions;
 OsBootInfo    BootInfo;
@@ -81,6 +80,7 @@ WireSubsys wireSubsys;
 DriveSubsys driveSubsys;
 BankSubsys bankSubsys;
 RtcSubsys rtcSubsys;
+SerialSubsys serialSubsys;
 
 // ------------------------------------------------------------------------------
 
@@ -511,13 +511,7 @@ void loop()
          break;
 
         case  SERIAL_TX:
-          // SERIAL TX:     
-          //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-          //                            ---------------------------------------------------------
-          //                             D7 D6 D5 D4 D3 D2 D1 D0    ASCII char to be sent to serial
-          
-          Serial.write(ioData);
-          ioOpcode = NO_OP;
+          ioOpcode = serialSubsys.Write((Opcodes)ioOpcode, ioData);
         break;
         
         case GPIOA_WRITE:
@@ -544,18 +538,9 @@ void loop()
         break;
         
         case SETPATH:
-          ioOpcode = fatSystem.SetPath(ioData);
-        break;
-
         case SETSEGMENT:
-          // SET SEGMENT
-          // SETSEGMENT - Set the segment to be read.written from a FAT file each segment is 128 except for the last that
-          //              might be less.
-          ioOpcode = fatSystem.SetSegment(ioData);
-        break;
-
         case WRITEFILE:
-          ioOpcode = fatSystem.WriteFile(ioData);
+          ioOpcode = fatSystem.Write((Opcodes)ioOpcode, ioData);
         break;
 
         case I2CADDR:
@@ -603,14 +588,7 @@ void loop()
           // NOTE 4: A "RX buffer empty" flag and a "Last Rx char was empty" flag are available in the SYSFLAG opcode 
           //         to allow 8 bit I/O.
           //
-          ioData = 0xFF;
-          if (Serial.available() > 0)
-          {
-            ioData = Serial.read();
-            LastRxIsEmpty = 0;                // Reset the "Last Rx char was empty" flag
-          }
-          else LastRxIsEmpty = 1;             // Set the "Last Rx char was empty" flag
-          digitalWrite(INT_, HIGH);
+          serialSubsys.Read(NO_OP, ioData);
         }
         else
         // .........................................................................................................
@@ -641,20 +619,7 @@ void loop()
           break;
 
           case  SYSFLAGS:
-            // SYSFLAGS (Various system flags for the OS):
-            //                I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
-            //                            ---------------------------------------------------------
-            //                              X  X  X  X  X  X  X  0    AUTOEXEC not enabled
-            //                              X  X  X  X  X  X  X  1    AUTOEXEC enabled
-            //                              X  X  X  X  X  X  0  X    DS3231 RTC not found
-            //                              X  X  X  X  X  X  1  X    DS3231 RTC found
-            //                              X  X  X  X  X  0  X  X    Serial RX buffer empty
-            //                              X  X  X  X  X  1  X  X    Serial RX char available
-            //                              X  X  X  X  0  X  X  X    Previous RX char valid
-            //                              X  X  X  X  1  X  X  X    Previous RX char was a "buffer empty" flag
-            //
-            // NOTE: Currently only D0-D3 are used
-            ioData = SystemOptions.AutoexecFlag | (foundRTC << 1) | ((Serial.available() > 0) << 2) | ((LastRxIsEmpty > 0) << 3);
+            ioData = SystemOptions.AutoexecFlag | (foundRTC << 1) | ((Serial.available() > 0) << 2) | ((serialSubsys.LastRxIsEmpty() > 0) << 3);
             ioOpcode = NO_OP;
           break;
 
@@ -672,7 +637,8 @@ void loop()
           case READFILE:
           case FILEEXISTS:
           case MKDIR:
-            ioOpcode = fatSystem.ReadNextDir(ioData);
+          case DELFILE:
+            ioOpcode = fatSystem.Read((Opcodes)ioOpcode, ioData);
           break;
 
           case I2CPROBE:

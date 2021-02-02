@@ -37,8 +37,6 @@ private:
   
   File openFile;
   String filePath;
-  Opcodes lastOpCode;
-  byte ioCount;
   uint8_t dirCount;
   uint16_t segment;
   FileInfo fileInfo;

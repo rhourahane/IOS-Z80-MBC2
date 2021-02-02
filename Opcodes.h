@@ -189,7 +189,7 @@ enum Opcodes : byte
   //     |                  |
   // I/O DATA N   D7 D6 D5 D4 D3 D2 D1 D0    '\0'
   // Note: The path string is terminated by a '\0' char and directories separated by '/'.
-  SETPATH      = 0x0E,
+  SETPATH = 0x0E,
   
   // Set segment number to be read/written from the FAT file
   // I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
@@ -345,13 +345,14 @@ enum Opcodes : byte
   READFILE     = 0x89,
   FILEEXISTS   = 0x8A,
   MKDIR        = 0x8B,
+  DELFILE = 0x8C,
 
   // Probe an address on the I2C bus
   // I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
   // ---------------------------------------------------------
   //              D7 D6 D5 D4 D3 D2 D1 D0   Status
   // Note: 0 if not pressent 1 if present.
-  I2CPROBE = 0x8C,
+  I2CPROBE = 0x8D,
 
   // Read from the I2C bus the previously set number of bytes
   // I/O DATA:    D7 D6 D5 D4 D3 D2 D1 D0
@@ -359,7 +360,7 @@ enum Opcodes : byte
   // I/O DATA 0   D7 D6 D5 D4 D3 D2 D1 D0
   //     |                  |
   // I/O DATA N   D7 D6 D5 D4 D3 D2 D1 D0
-  I2CREAD = 0X8D,
+  I2CREAD = 0X8E,
 
   // No operation, used when no IO opteration is in flight.
   NO_OP = 0xFF
