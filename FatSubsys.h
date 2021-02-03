@@ -11,7 +11,6 @@ public:
 
   Opcode Read(Opcode opcode, byte &ioByte);
   Opcode Write(Opcode opcode, byte ioByte);
-  void Reset(Opcode opcode);
   
 //private:
   Opcode SetPath(byte ioByte);

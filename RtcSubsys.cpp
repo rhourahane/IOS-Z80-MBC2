@@ -22,11 +22,6 @@ Opcode RtcSubsys::Write(Opcode opcode, byte ioByte)
 
 }
 
-void RtcSubsys::Reset(Opcode opcode)
-{
-
-}
-
 void RtcSubsys::foundRtc(byte found)
 {
   rtcFound = found;

@@ -53,11 +53,6 @@ Opcode FatSystem::Write(Opcode opcode, byte ioByte)
 
   return lastOpcode;
 }
-
-void FatSystem::Reset(Opcode opcode)
-{
-  
-}
   
 Opcode FatSystem::SetPath(byte ioByte)
 {

@@ -36,10 +36,6 @@ Opcode SerialSubsys::Write(Opcode opcode, byte ioByte)
   return NO_OP;
 }
 
-void SerialSubsys::Reset(Opcode opcode)
-{
-}
-
 byte SerialSubsys::LastRxIsEmpty()
 {
   return lastRxIsEmpty;

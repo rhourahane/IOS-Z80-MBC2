@@ -110,9 +110,6 @@ byte          ioAddress;                  // Virtual I/O address. Only two possi
 byte          ioData;                     // Data byte used for the I/O operation
 Opcode       ioOpcode       = NO_OP;     // I/O operation code or Opcode (0xFF means "No Operation")
 byte          moduleGPIO     = 0;         // Set to 1 if the module is found, 0 otherwise
-byte *        BootImage;                  // Pointer to selected flash payload array (image) to boot
-word          BootImageSize  = 0;         // Size of the selected flash payload array (image) to boot
-word          BootStrAddr;                // Starting address of the selected program to boot (from flash or SD)
 byte          Z80IntEnFlag   = 0;         // Z80 INT_ enable flag (0 = No INT_ used, 1 = INT_ used for I/O)
 
 ConfigOptions SystemOptions;
@@ -290,6 +287,9 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
   // Z80 PROGRAM LOAD
   // ----------------------------------------
   const char *fileNameSD;
+  byte *BootImage;         // Pointer to selected flash payload array (image) to boot
+  word  BootImageSize;     // Size of the selected flash payload array (image) to boot
+  word  BootStrAddr;       // Starting address of the selected program to boot (from flash or SD)
 
   // Get the starting address of the program to load and boot, and its size if stored in the flash
   switch (bootMode)

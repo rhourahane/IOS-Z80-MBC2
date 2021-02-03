@@ -40,11 +40,6 @@ Opcode WireSubsys::Write(Opcode opcode, byte ioByte)
   return lastOpcode;
 }
 
-void WireSubsys::Reset(Opcode opcode)
-{
-  
-}
-
 Opcode WireSubsys::I2cAddr(byte ioByte)
 {
   if (lastOpcode != I2CADDR)

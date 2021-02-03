@@ -33,8 +33,3 @@ Opcode UserSubsys::Write(Opcode opcode, byte ioByte)
 
   return NO_OP;
 }
-
-
-void UserSubsys::Reset(Opcode opcode)
-{
-}

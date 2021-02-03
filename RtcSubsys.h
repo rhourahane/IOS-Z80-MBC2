@@ -10,7 +10,6 @@ public:
   
   Opcode Read(Opcode opcode, byte &ioByte);
   Opcode Write(Opcode opcode, byte ioByte);
-  void Reset(Opcode opcode);
 
   void foundRtc(byte found);
   byte foundRtc();

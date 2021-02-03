@@ -7,7 +7,6 @@ class GpioSubsys : public BaseSubsys
 public:
   Opcode Read(Opcode opcode, byte &ioByte);
   Opcode Write(Opcode opcode, byte ioByte);
-  void Reset(Opcode opcode);
 };
 
 #endif

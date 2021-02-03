@@ -10,7 +10,6 @@ public:
   
   virtual Opcode Read(Opcode opcode, byte &ioByte) = 0;
   virtual Opcode Write(Opcode opcode, byte ioByte) = 0;
-  virtual void Reset(Opcode opcode) = 0;
 
 protected:
   static Opcode lastOpcode;

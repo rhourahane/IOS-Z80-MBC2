@@ -47,7 +47,3 @@ Opcode GpioSubsys::Write(Opcode opcode, byte ioByte)
   }
   return NO_OP;
 }
-
-void GpioSubsys::Reset(Opcode opcode)
-{
-}

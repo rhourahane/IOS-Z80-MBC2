@@ -50,11 +50,6 @@ Opcode DriveSubsys::Write(Opcode opcode, byte ioByte)
   return lastOpcode;
 }
 
-void DriveSubsys::Reset(Opcode opcode)
-{
-  
-}
-
 void DriveSubsys::DiskSet(byte diskNo)
 {
   diskSet = diskNo;

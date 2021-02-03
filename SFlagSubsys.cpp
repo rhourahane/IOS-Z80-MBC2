@@ -22,10 +22,6 @@ Opcode SFlagSubsys::Write(Opcode opcode, byte ioByte)
   return NO_OP;
 }
 
-void SFlagSubsys::Reset(Opcode opcode)
-{
-}
-
 void SFlagSubsys::FoundRtc(byte value)
 {
   foundRtc = value;

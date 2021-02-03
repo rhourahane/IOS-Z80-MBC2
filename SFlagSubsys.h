@@ -10,7 +10,6 @@ public:
     
   Opcode Read(Opcode opcode, byte &ioByte);
   Opcode Write(Opcode opcode, byte ioByte);
-  void Reset(Opcode opcode);
 
   void FoundRtc(byte value);
   void AutoexecFlag(byte value);
