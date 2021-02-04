@@ -60,15 +60,14 @@ Opcode FatSystem::SetPath(byte ioByte)
   {
     filePath = "";
     lastOpcode = SETPATH;
-  }
-  
-  if (ioByte == 0)
-  {
     if (openFile)
     {
       openFile.close();
     }
-
+  }
+  
+  if (ioByte == 0)
+  {
     lastOpcode = NO_OP;
   }
   else

@@ -188,7 +188,9 @@ enum Opcode : byte
   // I/O DATA 0   D7 D6 D5 D4 D3 D2 D1 D0    1st char of path
   //     |                  |
   // I/O DATA N   D7 D6 D5 D4 D3 D2 D1 D0    '\0'
-  // Note: The path string is terminated by a '\0' char and directories separated by '/'.
+  // NOTE 1: The path string is terminated by a '\0' char and directories separated by '/'.
+  // NOYE 2: After writing to a FAT file the path should be set to '\0' to close the file and
+  //         ensure that all data is written.
   SETPATH = 0x0E,
   
   // Set segment number to be read/written from the FAT file

@@ -8,8 +8,8 @@ class BaseSubsys
 public:
   BaseSubsys();
   
-  virtual Opcode Read(Opcode opcode, byte &ioByte) = 0;
-  virtual Opcode Write(Opcode opcode, byte ioByte) = 0;
+  //virtual Opcode Read(Opcode opcode, byte &ioByte) = 0;
+  //virtual Opcode Write(Opcode opcode, byte ioByte) = 0;
 
 protected:
   static Opcode lastOpcode;

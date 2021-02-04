@@ -49,7 +49,8 @@ OsBootInfo GetDiskSetBootInfo(byte setNum)
   OsBootInfo tmpInfo = {0, 0, 0};
   const char *binName = MkOsDiskSet(setNum);
   byte numReadBytes;
-  
+
+  byte bufferSD[SEGMENT_SIZE];
   byte result = openSD(binName);
   if (result == 0)
   {

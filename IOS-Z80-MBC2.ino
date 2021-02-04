@@ -399,6 +399,7 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
     do
     // If an error occurs repeat until error disappears (or the user forces a reset)
     {
+      byte bufferSD[SEGMENT_SIZE];
       byte numReadBytes;
       do
       // Read a "segment" of a SD sector and load it into RAM

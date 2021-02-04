@@ -30,7 +30,3 @@ Opcode BankSubsys::Write(Opcode opcode, byte ioByte)
 
   return NO_OP;
 }
-
-void BankSubsys::Reset(Opcode opcode)
-{
-}

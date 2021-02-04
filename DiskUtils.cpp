@@ -1,7 +1,6 @@
 #include "HwDefines.h"
 #include "DiskUtils.h"
 
-byte bufferSD[SEGMENT_SIZE];
 File openSDFile;
 
 byte mountSD()
