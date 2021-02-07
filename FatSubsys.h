@@ -12,7 +12,7 @@ public:
   Opcode Read(Opcode opcode, byte &ioByte);
   Opcode Write(Opcode opcode, byte ioByte);
   
-//private:
+private:
   Opcode SetPath(byte ioByte);
   Opcode SetSegment(byte ioByte);
 

@@ -22,6 +22,8 @@ Opcode SerialSubsys::Read(Opcode opcode, byte &ioByte)
   }
 
   digitalWrite(INT_, HIGH);
+
+  return NO_OP;
 }
 
 Opcode SerialSubsys::Write(Opcode opcode, byte ioByte)

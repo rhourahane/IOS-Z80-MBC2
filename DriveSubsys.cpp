@@ -1,9 +1,8 @@
 #include "DriveSubsys.h"
 #include "DiskUtils.h"
 
-DriveSubsys::DriveSubsys() : trackSel(0), sectSel(0), diskError(NO_ERROR), diskName("DSxNyy.DSK")
+DriveSubsys::DriveSubsys() : diskSet(0), diskName("DSxNyy.DSK"),  trackSel(0), sectSel(0), diskError(NO_ERROR)
 {
-  
 }
 
 Opcode DriveSubsys::Read(Opcode opcode, byte &ioByte)

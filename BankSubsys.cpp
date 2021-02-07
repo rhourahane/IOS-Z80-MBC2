@@ -3,6 +3,7 @@
 
 Opcode BankSubsys::Read(Opcode opcode, byte &ioByte)
 {
+  return NO_OP;
 }
 
 Opcode BankSubsys::Write(Opcode opcode, byte ioByte)

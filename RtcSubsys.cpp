@@ -19,7 +19,7 @@ Opcode RtcSubsys::Read(Opcode opcode, byte &ioByte)
 
 Opcode RtcSubsys::Write(Opcode opcode, byte ioByte)
 {
-
+  return NO_OP;
 }
 
 void RtcSubsys::foundRtc(byte found)
