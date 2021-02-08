@@ -106,11 +106,9 @@ const byte * const flashBootTable[1] PROGMEM = {boot_A_}; // Payload pointers ta
 // ------------------------------------------------------------------------------
 
 // General purpose variables
-byte          ioAddress;                  // Virtual I/O address. Only two possible addresses are valid (0x00 and 0x01)
-byte          ioData;                     // Data byte used for the I/O operation
-Opcode       ioOpcode       = NO_OP;     // I/O operation code or Opcode (0xFF means "No Operation")
-byte          moduleGPIO     = 0;         // Set to 1 if the module is found, 0 otherwise
-byte          Z80IntEnFlag   = 0;         // Z80 INT_ enable flag (0 = No INT_ used, 1 = INT_ used for I/O)
+Opcode  ioOpcode       = NO_OP;     // I/O operation code or Opcode (0xFF means "No Operation")
+byte    moduleGPIO     = 0;         // Set to 1 if the module is found, 0 otherwise
+byte    Z80IntEnFlag   = 0;         // Z80 INT_ enable flag (0 = No INT_ used, 1 = INT_ used for I/O)
 
 ConfigOptions SystemOptions;
 OsBootInfo    BootInfo;
@@ -471,8 +469,6 @@ byte          bootSelection = 0;          // Flag to enter into the boot mode se
 
 void loop() 
 {
-  byte tempByte;
-  
   if (!digitalRead(WAIT_))
   // I/O operaton requested
   {
@@ -484,8 +480,8 @@ void loop()
     // ----------------------------------------
     
     {
-      ioAddress = digitalRead(AD0);               // Read Z80 address bus line AD0 (PC2)
-      ioData = PINA;                              // Read Z80 data bus D0-D7 (PA0-PA7)
+      byte ioAddress = digitalRead(AD0);          // Read Z80 address bus line AD0 (PC2)
+      byte ioData = PINA;                         // Read Z80 data bus D0-D7 (PA0-PA7)
       if (ioAddress)                              // Check the I/O address (only AD0 is checked!)
       // .........................................................................................................
       //
@@ -613,8 +609,8 @@ void loop()
       // ----------------------------------------
       
       {
-        ioAddress = digitalRead(AD0);             // Read Z80 address bus line AD0 (PC2)
-        ioData = 0;                               // Clear input data buffer
+        byte ioAddress = digitalRead(AD0);        // Read Z80 address bus line AD0 (PC2)
+        byte ioData = 0;                          // Clear input data buffer
         if (ioAddress)                            // Check the I/O address (only AD0 is checked!)
         // .........................................................................................................
         //

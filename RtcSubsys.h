@@ -3,7 +3,7 @@
 #include "BaseSubsys.h"
 #include "RtcUtilities.h"
 
-class RtcSubsys : BaseSubsys
+class RtcSubsys : public BaseSubsys
 {
 public:
   RtcSubsys();
