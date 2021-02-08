@@ -13,7 +13,7 @@ public:
 
 protected:
   static Opcode lastOpcode;
-  static int ioCount;
+  static word ioCount;
   static byte ioBuffer[128];
 };
 

@@ -29,7 +29,7 @@ void readRTC(RtcTime &rtcTime)
   rtcTime.second = bcdToDec(*ptr++ & 0x7f);
   rtcTime.minute = bcdToDec(*ptr++);
   rtcTime.hour = bcdToDec(*ptr++ & 0x3f);
-  *ptr++;
+  ptr++;
   rtcTime.day = bcdToDec(*ptr++);
   rtcTime.month = bcdToDec(*ptr++);
   rtcTime.year = bcdToDec(*ptr++);

@@ -19,6 +19,10 @@ Opcode WireSubsys::Read(Opcode opcode, byte &ioByte)
     case I2CREAD:
       lastOpcode = DoRead(ioByte);
     break;
+
+    default:
+      lastOpcode = NO_OP;
+      break;
   }
 
   return lastOpcode;
@@ -35,6 +39,10 @@ Opcode WireSubsys::Write(Opcode opcode, byte ioByte)
     case I2CWRITE:
       lastOpcode = DoWrite(ioByte);
     break;
+
+    default:
+      lastOpcode = NO_OP;
+      break;
   }
 
   return lastOpcode;

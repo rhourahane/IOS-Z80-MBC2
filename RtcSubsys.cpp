@@ -12,6 +12,10 @@ Opcode RtcSubsys::Read(Opcode opcode, byte &ioByte)
     case DATETIME:
       lastOpcode = ReadTime(ioByte);
       break;
+  
+    default:
+      lastOpcode = NO_OP;
+      break;
   }
 
   return lastOpcode;

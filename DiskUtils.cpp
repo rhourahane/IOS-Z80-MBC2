@@ -106,7 +106,7 @@ byte writeSD(byte* buffSD, byte* numWrittenBytes)
   if (openSDFile)
   {
     size_t numBytes;
-    byte  errcode;
+
     if (buffSD != NULL)
     {
       numBytes = openSDFile.write((const char *)buffSD, SEGMENT_SIZE);

@@ -132,9 +132,6 @@ void setup()
 //  Local variables
 //
 // ------------------------------------------------------------------------------
-
-byte          data;                       // External RAM data byte
-word          address;                    // External RAM current address;
 byte          bootSelection = 0;          // Flag to enter into the boot mode selection
 
 // ------------------------------------------------------------------------------
@@ -591,6 +588,10 @@ void loop()
         case I2CWRITE:
           ioOpcode = wireSubsys.Write(ioOpcode, ioData);
         break;
+
+        default:
+          ioOpcode = NO_OP;
+          break;
         }
       }
       
@@ -688,6 +689,10 @@ void loop()
           case I2CREAD:
             ioOpcode = wireSubsys.Read(ioOpcode, ioData);
           break;
+
+          default:
+            ioOpcode = NO_OP;
+            break;
           }
         }
         DDRA = 0xFF;                              // Configure Z80 data bus D0-D7 (PA0-PA7) as output

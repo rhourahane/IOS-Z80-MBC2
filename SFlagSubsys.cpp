@@ -12,6 +12,10 @@ Opcode SFlagSubsys::Read(Opcode opcode, byte &ioByte)
     case SYSFLAGS:
       ioByte = autoexecFlag | (foundRtc << 1) | ((Serial.available() > 0) << 2) | ((serialSubsys.LastRxIsEmpty() > 0) << 3);
       break;
+
+    default:
+      lastOpcode = NO_OP;
+      break;
   }
 
   return NO_OP;

@@ -13,7 +13,11 @@ Opcode GpioSubsys::Read(Opcode opcode, byte &ioByte)
     case GPIOB_READ:
       ReadRegisters(GPIOEXP_ADDR, GPIOB_REG, 1, &ioByte);
     break;
-  }
+  
+    default:
+      lastOpcode = NO_OP;
+      break;
+}
   return NO_OP;
 }
 
@@ -44,6 +48,10 @@ Opcode GpioSubsys::Write(Opcode opcode, byte ioByte)
     case GPPUB_WRITE:
       WriteRegisters(GPIOEXP_ADDR, GPPUB_REG, 1, &ioByte);
     break;
+
+    default:
+      lastOpcode = NO_OP;
+      break;
   }
   return NO_OP;
 }

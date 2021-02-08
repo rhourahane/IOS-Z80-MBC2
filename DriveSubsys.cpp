@@ -16,6 +16,10 @@ Opcode DriveSubsys::Read(Opcode opcode, byte &ioByte)
     case READSECT:
       lastOpcode = ReadSect(ioByte);
       break;
+
+    default:
+      lastOpcode = NO_OP;
+      break;
   }
 
   return lastOpcode;
@@ -44,6 +48,11 @@ Opcode DriveSubsys::Write(Opcode opcode, byte ioByte)
     case SDMOUNT:
       ioByte = mountSD();
       lastOpcode = NO_OP;
+      break;
+
+    default:
+      lastOpcode = NO_OP;
+      break;
   }
 
   return lastOpcode;

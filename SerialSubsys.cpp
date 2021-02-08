@@ -33,6 +33,10 @@ Opcode SerialSubsys::Write(Opcode opcode, byte ioByte)
     case SERIAL_TX:
       Serial.write(ioByte);
       break;
+
+    default:
+      lastOpcode = NO_OP;
+      break;
   }
 
   return NO_OP;

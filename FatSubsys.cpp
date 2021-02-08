@@ -29,7 +29,11 @@ Opcode FatSystem::Read(Opcode opcode, byte &ioByte)
     case DELFILE:
       lastOpcode = DeleteFile(ioByte);
       break;
-  }
+  
+    default:
+      lastOpcode = NO_OP;
+      break;
+}
 
   return lastOpcode;
 }
@@ -48,6 +52,10 @@ Opcode FatSystem::Write(Opcode opcode, byte ioByte)
 
     case WRITEFILE:
       lastOpcode = WriteFile(ioByte);
+      break;
+
+    default:
+      lastOpcode = NO_OP;
       break;
   }
 
