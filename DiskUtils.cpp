@@ -26,13 +26,6 @@ byte openSD(const char* fileName, bool create)
 // *  "fileName" is the pointer to the string holding the file name (8.3 format)
 // The returned value is the resulting status (0 = ok, otherwise see printErrSD())
 {
-  //
-  if ((openSDFile.name() != NULL) &&
-      (strcmp(openSDFile.name(), fileName) == 0))
-  {
-    return NO_ERROR;
-  }
-  
   if (create || SD.exists(fileName))
   {
     openSDFile = SD.open(fileName, FILE_WRITE);
@@ -49,7 +42,7 @@ byte openSD(const char* fileName, bool create)
     return NOT_OPENED;
   }
 
-  return NO_FILE;
+  return NOT_OPENED;
 }
 
 // ------------------------------------------------------------------------------
